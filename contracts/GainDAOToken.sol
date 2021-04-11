@@ -11,7 +11,7 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
 
     constructor()
         ERC20("GainDAO Token", "GAIN")
-        ERC20Capped(42_000_000 * (10 ^ 18))
+        ERC20Capped(42_000_000 * (10**18))
     {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(PAUSER_ROLE, _msgSender());
