@@ -9,10 +9,16 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    constructor() ERC20("GainDAO", "GAIN") ERC20Capped(42_000_000 * (10 ^ 18)) {
+    constructor()
+        ERC20("GainDAO Token", "GAIN")
+        ERC20Capped(42_000_000 * (10 ^ 18))
+    {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(PAUSER_ROLE, _msgSender());
         _setupRole(MINTER_ROLE, _msgSender());
+
+        // when the token is deployed, it starts as paused
+        _pause();
     }
 
     // We explicitely do not support pausing the token.
@@ -22,13 +28,32 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
     // }
 
     function unpause() public {
-        require(hasRole(PAUSER_ROLE, _msgSender()));
+        require(
+            hasRole(PAUSER_ROLE, _msgSender()),
+            "GainDAOToken: _msgSender() does not have the pauser role"
+        );
         _unpause();
     }
 
     function mint(address to, uint256 amount) public {
-        require(hasRole(MINTER_ROLE, _msgSender()));
+        require(
+            hasRole(MINTER_ROLE, _msgSender()),
+            "GainDAOToken: _msgSender() does not have the minter role"
+        );
+
+        // when minting coins we have to do a bit of a hack where we unpause
+        // and then repause the token so that the _beforeTokenTransfer works
+        bool needToPauseAgain = false;
+        if (paused()) {
+            _unpause();
+            needToPauseAgain = true;
+        }
+
         _mint(to, amount);
+
+        if (needToPauseAgain) {
+            _pause();
+        }
     }
 
     function _beforeTokenTransfer(
