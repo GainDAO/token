@@ -41,26 +41,20 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
             "GainDAOToken: _msgSender() does not have the minter role"
         );
 
-        // when minting coins we have to do a bit of a hack where we unpause
-        // and then repause the token so that the _beforeTokenTransfer works
-        bool needToPauseAgain = false;
-        if (paused()) {
-            _unpause();
-            needToPauseAgain = true;
-        }
-
         _mint(to, amount);
-
-        if (needToPauseAgain) {
-            _pause();
-        }
     }
 
     function _beforeTokenTransfer(
         address from,
         address to,
         uint256 amount
-    ) internal override whenNotPaused {
+    ) internal override {
+        // if we are not minting tokens (`from` is address 0), check wether we are
+        // paused or not
+        if (from != address(0)) {
+            require(!paused(), "GainDAOToken: paused");
+        }
+
         super._beforeTokenTransfer(from, to, amount);
     }
 }

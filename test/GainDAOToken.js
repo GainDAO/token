@@ -78,7 +78,7 @@ describe("GainDAOToken", () => {
     it("cannot transfer coins when the token is paused", async () => {
       await expectError(
         token.connect(user).transfer(deployer.address, 100),
-        "Pausable: paused",
+        "GainDAOToken: paused",
       );
     })
 
