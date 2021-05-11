@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
     constructor()
         ERC20("GainDAO Token", "GAIN")
@@ -16,6 +17,7 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(PAUSER_ROLE, _msgSender());
         _setupRole(MINTER_ROLE, _msgSender());
+        _setupRole(BURNER_ROLE, _msgSender());
 
         // when the token is deployed, it starts as paused
         _pause();
@@ -44,14 +46,26 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
         _mint(to, amount);
     }
 
+    function burn(uint256 amount) public {
+        require(
+            hasRole(BURNER_ROLE, _msgSender()),
+            "GainDAOToken: _msgSender() does not have the burner role"
+        );
+
+        _burn(_msgSender(), amount);
+    }
+
     function _beforeTokenTransfer(
         address from,
         address to,
         uint256 amount
     ) internal override {
-        // if we are not minting tokens (`from` is address 0), check wether we are
+        // if we are not minting or burning tokens, check wether we are
         // paused or not
-        if (from != address(0)) {
+        if (
+            from != address(0) &&
+            (to != address(0) && !hasRole(BURNER_ROLE, _msgSender()))
+        ) {
             require(!paused(), "GainDAOToken: paused");
         }
 

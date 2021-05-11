@@ -130,4 +130,28 @@ describe("GainDAOToken", () => {
       );
     })
   })
+
+  context("burning", () => {
+    it("burner can burn tokens", async () => {
+      await token.connect(deployer).mint(deployer.address, 100);
+      await token.connect(deployer).burn(75);
+      expect(await token.balanceOf(deployer.address)).to.equal(25);
+    })
+
+    it("non burner cannot burn tokens", async () => {
+      await expectError(
+        token.connect(user).burn(100),
+        "GainDAOToken: _msgSender() does not have the burner role",
+      );
+    })
+
+    it("cannot burn more tokens that balance", async () => {
+      await token.connect(deployer).mint(deployer.address, 100);
+
+      await expectError(
+        token.connect(deployer).burn(110),
+        "ERC20: burn amount exceeds balance"
+      );
+    })
+  })
 });
