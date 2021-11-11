@@ -18,3 +18,7 @@ configured vesting schedule.
 
 We use vesting schedules with a configurable cliff and continuous vesting over time (it is possible
 to claim tokens on every blocks). Tokens start vesting only when the cliff is reached.
+
+## Distribution
+A contract that can be used to distribute tokens at a rate that has a linear inverse relation to the total
+number of tokens distributed at a certain moment
