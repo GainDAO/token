@@ -131,6 +131,14 @@ contract ERC20Distribution is Pausable {
       return !paused();
     }
     
+    /**
+        * @dev Getter for the distribution state.
+        */
+    function purchaseAllowed() public view virtual returns (bool) {
+      // KYC vetting will be implemented here
+      return true;
+    }
+    
     // After distribution has started, the contract can no longer be paused
     // function pause() public {
     //     require(hasRole(PAUSER_ROLE, _msgSender()));
@@ -174,6 +182,12 @@ contract ERC20Distribution is Pausable {
         * @param rate purchase tokens only at this rate
         */
     function purchaseTokens(uint256 tokenbalance, uint256 rate) public payable {
+      
+      require(
+        purchaseAllowed(),
+        "Buyer did not pass KYC procedure"
+      );
+      
       uint256 actualrate = currentRate();
       require(
         rate==actualrate,
