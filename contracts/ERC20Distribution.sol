@@ -48,15 +48,15 @@ contract ERC20Distribution is Pausable {
         );
         
         require(
-            distStartRate > distEndRate,
-            "TokenDistribution: start rate should be > end rate"
-        );
-        
-        require(
             distStartRate > 0 && distEndRate > 0,
             "TokenDistribution: rates should > 0"
         );
 
+        require(
+            distStartRate > distEndRate,
+            "TokenDistribution: start rate should be > end rate"
+        );
+        
         _trusted_token = distToken;
         _beneficiary = distBeneficiary;
 
@@ -68,13 +68,6 @@ contract ERC20Distribution is Pausable {
 
         // when the contract is deployed, it starts as paused
         _pause();
-    }
-    
-    /**
-        * @dev Getter for the address that receives the ether value of the sold tokens
-        */
-    function beneficiary() public view virtual returns (address) {
-      return _beneficiary;
     }
     
     /**
@@ -109,11 +102,6 @@ contract ERC20Distribution is Pausable {
         * @dev Function that starts distribution.
         */
     function startDistribution() whenPaused public payable {
-      require(
-        paused(),
-        'Distribution already started'
-      );
-      
       require(
         _trusted_token.balanceOf(address(this))==_total_distribution_balance,
         'Initial distribution balance must be correct'
@@ -189,13 +177,13 @@ contract ERC20Distribution is Pausable {
       );
       
       uint256 actualrate = currentRate();
+      require(actualrate>0,
+        "unable to sell at the given rate: distribution has ended"
+      );
+      
       require(
         rate==actualrate,
         "unable to sell at the given rate: rate has changed"
-      );
-      
-      require(actualrate>0,
-        "unable to sell at the given rate: distribution has ended"
       );
       
       uint256 ethbalance = tokenbalance.div(actualrate);

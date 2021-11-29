@@ -82,7 +82,7 @@ describe("ERC20Distribution", () => {
   
   context("initialization", async () => {
     it("has correct beneficiary", async () => {
-      expect(await distribution.beneficiary()).to.equal(treasury.address);
+      expect(await distribution._beneficiary()).to.equal(treasury.address);
     })
     
     it("has correct start rate", async () => {
