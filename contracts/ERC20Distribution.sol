@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**
  * @title ERC20Distribution
@@ -14,11 +15,15 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 contract ERC20Distribution is Pausable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-
+    using ECDSA for bytes32;
+ 
     event TokensSold(address recipient, uint256 amountToken, uint256 amountEth, uint256 actualRate);
     
     IERC20 public _trusted_token;
     address payable public _beneficiary;
+
+    address public _owner;
+    address public _kyc_approver; // address that signs the KYC approval
 
     uint256 private _startrate_distribution_e18; // stored internally in high res
     uint256 private _endrate_distribution_e18;   // stored internally in high res
@@ -59,13 +64,16 @@ contract ERC20Distribution is Pausable {
         
         _trusted_token = distToken;
         _beneficiary = distBeneficiary;
+        
+        _owner = msg.sender;
+        _kyc_approver = address(0);
 
         _startrate_distribution_e18  = distStartRate * (10**18);
         _endrate_distribution_e18  = distEndRate * (10**18);
         
         _total_distribution_balance = distVolumeTokens;
         _current_distributed_balance = 0;
-
+        
         // when the contract is deployed, it starts as paused
         _pause();
     }
@@ -120,11 +128,41 @@ contract ERC20Distribution is Pausable {
     }
     
     /**
-        * @dev Getter for the distribution state.
+        * @dev KYC signature check
         */
-    function purchaseAllowed() public view virtual returns (bool) {
-      // KYC vetting will be implemented here
+    function purchaseAllowed(bytes calldata proof, address from, uint256 validto) public view virtual returns (bool) {
+      require(_kyc_approver != address(0),
+        "No KYC approver set: unable to validate buyer"
+      );
+      
+      bytes32 expectedHash =
+        hashForKYC(from, validto)
+          .toEthSignedMessageHash();
+          
+      require(expectedHash.recover(proof) == _kyc_approver,
+        "KYC: invalid token"
+      );
+      
+      require(validto > block.number,
+        "KYC: token expired"
+      );
+      
       return true;
+    }
+    
+    function hashForKYC(address sender, uint256 validTo) public pure returns (bytes32) {
+        return keccak256(abi.encode(sender, validTo));
+    }
+    
+    /**
+        * @dev Function that sets a new KYC Approver address
+        */
+    function changeKYCApprover(address newKYCApprover) public {
+      require(msg.sender == _owner,
+        "Only the contract owner can change the KYCApprover"
+      );
+        
+      _kyc_approver = newKYCApprover;
     }
     
     // After distribution has started, the contract can no longer be paused
@@ -169,39 +207,46 @@ contract ERC20Distribution is Pausable {
         * @param tokenbalance number of tokens to purchase
         * @param rate purchase tokens only at this rate
         */
-    function purchaseTokens(uint256 tokenbalance, uint256 rate) public payable {
-      
-      require(
-        purchaseAllowed(),
-        "Buyer did not pass KYC procedure"
-      );
-      
-      uint256 actualrate = currentRate();
-      require(actualrate>0,
-        "unable to sell at the given rate: distribution has ended"
-      );
-      
-      require(
-        rate==actualrate,
-        "unable to sell at the given rate: rate has changed"
-      );
-      
-      uint256 ethbalance = tokenbalance.div(actualrate);
-      require(
-        msg.value>=ethbalance,
-        "unable to purchase tokens: insufficient ether supplied"
-      );
+        function purchaseTokens(
+          uint256 tokenbalance,
+          uint256 rate,
+          bytes calldata proof,
+          uint256 validTo) public payable {
+          
+          // anyone but contract owner must pass kyc
+          if(msg.sender!=_owner) {
+            require(
+              purchaseAllowed(proof, msg.sender, validTo),
+              "Buyer did not pass KYC procedure"
+            );
+          }
+          
+          uint256 actualrate = currentRate();
+          require(actualrate>0,
+            "unable to sell at the given rate: distribution has ended"
+          );
+          
+          require(
+            rate==actualrate,
+            "unable to sell: current rate is below requested rate"
+          );
+          
+          uint256 ethbalance = tokenbalance.div(actualrate);
+          require(
+            msg.value>=ethbalance,
+            "unable to purchase tokens: insufficient ether supplied"
+          );
 
-      uint256 pool_balance = _trusted_token.balanceOf(address(this));
-      require(tokenbalance<=pool_balance,
-        "insufficient tokens available in the distribution pool"
-      );
-      
-      _current_distributed_balance = _current_distributed_balance.add(tokenbalance);
-      _beneficiary.transfer(msg.value);
+          uint256 pool_balance = _trusted_token.balanceOf(address(this));
+          require(tokenbalance<=pool_balance,
+            "insufficient tokens available in the distribution pool"
+          );
+          
+          _current_distributed_balance = _current_distributed_balance.add(tokenbalance);
+          _beneficiary.transfer(msg.value);
 
-      _trusted_token.transfer(msg.sender, tokenbalance);
+          _trusted_token.transfer(msg.sender, tokenbalance);
 
-      emit TokensSold(msg.sender, ethbalance, tokenbalance, actualrate);
+          emit TokensSold(msg.sender, ethbalance, tokenbalance, actualrate);
+        }
     }
-}
