@@ -38,7 +38,7 @@ contract ERC20Distribution is Pausable {
      * @param distBeneficiary address of the beneficiary to whom received Ether is sent
      * @param distStartRate exchange rate at start of distribution
      * @param distEndRate exhange rate at the end of distribution
-     * @param distEndRate exhange rate at the end of distribution
+     * @param distVolumeTokens total distribution volume
     */
     constructor(
         IERC20 distToken,
@@ -204,12 +204,12 @@ contract ERC20Distribution is Pausable {
           Calculates total number of tokens that can be bought for the given Ether
           value, transfers the tokens to the sender. Transfers the received
           Ether to the benificiary address
-        * @param tokenbalance number of tokens to purchase
-        * @param rate purchase tokens only at this rate
+        * @param limitrate purchase tokens only at this rate or above
+        * @param proof proof data for kyc validation
+        * @param validTo expiry block for kyc proof
         */
         function purchaseTokens(
-          uint256 tokenbalance,
-          uint256 rate,
+          uint256 limitrate,
           bytes calldata proof,
           uint256 validTo) public payable {
           
@@ -220,23 +220,19 @@ contract ERC20Distribution is Pausable {
               "Buyer did not pass KYC procedure"
             );
           }
-          
+
           uint256 actualrate = currentRate();
           require(actualrate>0,
             "unable to sell at the given rate: distribution has ended"
           );
-          
+
           require(
-            rate==actualrate,
+            actualrate>=limitrate,
             "unable to sell: current rate is below requested rate"
           );
           
-          uint256 ethbalance = tokenbalance.div(actualrate);
-          require(
-            msg.value>=ethbalance,
-            "unable to purchase tokens: insufficient ether supplied"
-          );
-
+          uint256 tokenbalance = msg.value.mul(actualrate);
+          
           uint256 pool_balance = _trusted_token.balanceOf(address(this));
           require(tokenbalance<=pool_balance,
             "insufficient tokens available in the distribution pool"
@@ -247,6 +243,6 @@ contract ERC20Distribution is Pausable {
 
           _trusted_token.transfer(msg.sender, tokenbalance);
 
-          emit TokensSold(msg.sender, ethbalance, tokenbalance, actualrate);
+          emit TokensSold(msg.sender, msg.value, tokenbalance, actualrate);
         }
     }
