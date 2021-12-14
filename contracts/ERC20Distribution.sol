@@ -66,7 +66,6 @@ contract ERC20Distribution is Pausable {
         _beneficiary = distBeneficiary;
         
         _owner = msg.sender;
-        _kyc_approver = address(0);
 
         _startrate_distribution_e18  = distStartRate * (10**18);
         _endrate_distribution_e18  = distEndRate * (10**18);
@@ -92,10 +91,10 @@ contract ERC20Distribution is Pausable {
       return _endrate_distribution_e18 / (10**18);
     }
 
+    /**
+    * @dev standard getter for total_distribution_balance
+    */
     function total_distribution_balance() public view virtual returns (uint256) {
-      /**
-      * @dev standard getter for total_distribution_balance
-      */
       return _total_distribution_balance;
     }
     
