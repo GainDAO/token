@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 
 /**
  * @title ERC20Distribution
@@ -12,17 +13,18 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
    linearly decreasing exchange rate. After depletion of the initial supply, tokens
    can be recycled and resold at the end rate
  */
-contract ERC20Distribution is Pausable {
+contract ERC20Distribution is Pausable, AccessControlEnumerable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
+    
+    bytes32 public constant KYCMANAGER_ROLE = keccak256("KYCMANAGER_ROLE");
  
     event TokensSold(address recipient, uint256 amountToken, uint256 amountEth, uint256 actualRate);
     
     IERC20 public _trusted_token;
     address payable public _beneficiary;
 
-    address public _owner;
     address public _kyc_approver; // address that signs the KYC approval
 
     uint256 private _startrate_distribution_e18; // stored internally in high res
@@ -62,11 +64,12 @@ contract ERC20Distribution is Pausable {
             "TokenDistribution: start rate should be > end rate"
         );
         
+        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _setupRole(KYCMANAGER_ROLE, _msgSender());
+
         _trusted_token = distToken;
         _beneficiary = distBeneficiary;
         
-        _owner = msg.sender;
-
         _startrate_distribution_e18  = distStartRate * (10**18);
         _endrate_distribution_e18  = distEndRate * (10**18);
         
@@ -92,8 +95,8 @@ contract ERC20Distribution is Pausable {
     }
 
     /**
-    * @dev standard getter for total_distribution_balance
-    */
+      * @dev standard getter for total_distribution_balance
+      */
     function total_distribution_balance() public view virtual returns (uint256) {
       return _total_distribution_balance;
     }
@@ -157,8 +160,9 @@ contract ERC20Distribution is Pausable {
         * @dev Function that sets a new KYC Approver address
         */
     function changeKYCApprover(address newKYCApprover) public {
-      require(msg.sender == _owner,
-        "Only the contract owner can change the KYCApprover"
+      require(
+          hasRole(KYCMANAGER_ROLE, _msgSender()),
+          "KYC: _msgSender() does not have the KYC manager role"
       );
         
       _kyc_approver = newKYCApprover;
@@ -212,8 +216,8 @@ contract ERC20Distribution is Pausable {
           bytes calldata proof,
           uint256 validTo) public payable {
           
-          // anyone but contract owner must pass kyc
-          if(msg.sender!=_owner) {
+          // anyone but contract admins must pass kyc
+          if(hasRole(DEFAULT_ADMIN_ROLE, _msgSender())==false) {
             require(
               purchaseAllowed(proof, msg.sender, validTo),
               "Buyer did not pass KYC procedure"
