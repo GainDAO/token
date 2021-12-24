@@ -1,4 +1,4 @@
-
+/* eslint-disable */
 const { expect } = require("chai");
 
 const MNEMONIC_KYCPROVIDER1 = "invite grit junior buzz expose horn weird letter mountain worth carpet author";
@@ -48,7 +48,8 @@ describe("Launch", () => {
   let user3;
   
   const setupContracts = async () => {
-    [deployer, treasury, user1, user2, user3] = await ethers.getSigners();
+    [deployer, treasury, pool, user1, user2, user3] = await ethers.getSigners();
+    
 
     // deloy gainDAO token contract
     const GainDAOToken = await ethers.getContractFactory("GainDAOToken");
@@ -56,7 +57,8 @@ describe("Launch", () => {
     
     await token.deployed();
     
-    let distBeneficiary = treasury.address;
+    const treasuryaddress = treasury.address;
+    let distBeneficiary = pool.address;
     
     // deploy distribution contract
     const ERC20Distribution = await ethers.getContractFactory("ERC20Distribution");
@@ -69,34 +71,33 @@ describe("Launch", () => {
     
     await distribution.deployed();
 
-    await token.grantRole(token.DEFAULT_ADMIN_ROLE(), treasury.address);
-    await token.grantRole(token.PAUSER_ROLE(), treasury.address);
-    await token.grantRole(token.MINTER_ROLE(), treasury.address);
-    await token.grantRole(token.BURNER_ROLE(), treasury.address);
+    await token.grantRole(token.DEFAULT_ADMIN_ROLE(), treasuryaddress);
+    await token.grantRole(token.PAUSER_ROLE(), treasuryaddress);
+    await token.grantRole(token.MINTER_ROLE(), treasuryaddress);
+    await token.grantRole(token.BURNER_ROLE(), treasuryaddress);
     
-    await distribution.grantRole(distribution.DEFAULT_ADMIN_ROLE(), treasury.address);
-    await distribution.grantRole(distribution.KYCMANAGER_ROLE(), treasury.address);
+    await distribution.grantRole(distribution.DEFAULT_ADMIN_ROLE(), treasuryaddress);
+    await distribution.grantRole(distribution.KYCMANAGER_ROLE(), treasuryaddress);
     
+    // await token.connect(treasury).revokeRole(token.PAUSER_ROLE(), deployer.address);
+    // await token.connect(treasury).revokeRole(token.MINTER_ROLE(), deployer.address);
+    // await token.connect(treasury).revokeRole(token.BURNER_ROLE(), deployer.address);
+    // await token.connect(treasury).revokeRole(token.DEFAULT_ADMIN_ROLE(), deployer.address);
+    //
+    // await distribution.connect(treasury).revokeRole(distribution.KYCMANAGER_ROLE(), deployer.address);
+    // await distribution.connect(treasury).revokeRole(distribution.DEFAULT_ADMIN_ROLE(), deployer.address);
     
-    await token.connect(treasury).revokeRole(token.PAUSER_ROLE(), deployer.address);
-    await token.connect(treasury).revokeRole(token.MINTER_ROLE(), deployer.address);
-    await token.connect(treasury).revokeRole(token.BURNER_ROLE(), deployer.address);
-    await token.connect(treasury).revokeRole(token.DEFAULT_ADMIN_ROLE(), deployer.address);
-    
-    await distribution.connect(treasury).revokeRole(distribution.KYCMANAGER_ROLE(), deployer.address);
-    await distribution.connect(treasury).revokeRole(distribution.DEFAULT_ADMIN_ROLE(), deployer.address);
-    
-    await token.connect(treasury).unpause();
-    await token.connect(treasury).mint(distribution.address, cDistVolume);
+    await token.connect(deployer).unpause();
+    await token.connect(deployer).mint(distribution.address, cDistVolume);
 
-    await distribution.connect(treasury).startDistribution();
+    await distribution.connect(deployer).startDistribution();
 
     let dummyproof = "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
     let currentrate = await distribution.currentRate();
-    await userSpendsEther("130", currentrate, treasury, dummyproof, 0);
+    await userSpendsEther("0.1", currentrate, deployer, dummyproof, 0);
   }
   
   it("launches the GainDAO", async ()=>{
     await setupContracts();
-  });
+  }).timeout(cMaxTestDuration);
 });

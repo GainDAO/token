@@ -173,12 +173,13 @@ describe("ERC20Distribution", () => {
   let token;
   let deployer;
   let treasury;
+  let pool;
   let user1;
   let user2;
   let user3;
   
   const setupContracts = async () => {
-    [deployer, treasury, user1, user2, user3] = await ethers.getSigners();
+    [deployer, treasury, pool, user1, user2, user3] = await ethers.getSigners();
 
     // deloy gainDAO token contract
     const GainDAOToken = await ethers.getContractFactory("GainDAOToken");
@@ -187,7 +188,7 @@ describe("ERC20Distribution", () => {
     await token.deployed();
     await token.unpause();
     
-    let distBeneficiary = treasury.address;
+    let distBeneficiary = pool.address;
     
     // deploy distribution contract
     const ERC20Distribution = await ethers.getContractFactory("ERC20Distribution");
@@ -434,7 +435,7 @@ describe("ERC20Distribution", () => {
     })
   
     it("initialization - has correct beneficiary", async () => {
-      expect(await distribution._beneficiary()).to.equal(treasury.address);
+      expect(await distribution._beneficiary()).to.equal(pool.address);
     })
 
     it("initialization - has correct start rate", async () => {
@@ -560,6 +561,17 @@ describe("ERC20Distribution", () => {
       await distribution.changeKYCApprover(ADDRESS_KYCPROVIDER1);
     });
     
+    afterEach(async ()=> {
+      await setupContracts();
+  
+      await token.connect(deployer).mint(distribution.address, cDistVolume);
+      
+      let errorresult = distribution.connect(treasury).claim();
+      await expect(errorresult).to.be.revertedWith("Claim: only the beneficiary can claim funds from the distribution contract");
+
+      await distribution.connect(pool).claim();
+    });
+
     const executeBuyCycles = async (buyCycles, label) => {
 
       // buyCycles = [buyCycles[0]]
@@ -617,8 +629,27 @@ describe("ERC20Distribution", () => {
             let errorresult = userBuysTokens(tokens, cycle.rate, user1, user1expiredproof, expired);
             await expect(errorresult).to.be.revertedWith("KYC: token expired");
           })
+          
+          it("eth balance in contract is correct", async () => {
+            let balance3 = await distribution.balance();
+            expect(balance3).to.equal(cycle.pool_balance_end_wei);
+          });
         // });
       };
+      
+      it("it is able to claim all Ether from the distribution contract", async () => {
+        dist_start = await distribution.balance();
+        pool_start = await pool.balance();
+        distribution.connect(pooladdress).claim();
+        dist_end = await distribution.balance();;
+        pool_end = await pool.balance();
+        pool_delta = pool_end - pool_start;
+        dist_delta = dist_end - dist_start;
+        
+        expect(pool_delta).to.be.gt(0);
+        expect(dist_delta).to.be.lt(0);
+        expect(pool_delta + dist_delta).to.equal(0);
+      })
     }
     
     it("it tests small amounts at the start of distribution (fixed token amount)",async () => {
@@ -631,6 +662,7 @@ describe("ERC20Distribution", () => {
       }
       const buyCycles = getBuyCyclesByCount(tokencounts);
       await executeBuyCycles(buyCycles, "T1")
+      
     }).timeout(cMaxTestDuration); // it
   
     it("it tests small amounts at the tail of distribution (fixed token amount)",async () => {

@@ -173,7 +173,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     //     require(hasRole(PAUSER_ROLE, _msgSender()));
     //     _pause();
     // }
-    
+
     /**
         * @dev Function that calculates the current distribution rate based
         * on the inital distribution volume and the remaining volume.
@@ -200,6 +200,18 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
           // distribution ended
           return 0;
         }
+    }
+    
+    /**
+        * @dev Function that allows the beneficiary the retrieve
+              the current ether balance from the distribution contract
+        */
+    function claim() public {
+      require(msg.sender==_beneficiary,
+          "Claim: only the beneficiary can claim funds from the distribution contract"
+      );
+      
+      _beneficiary.transfer(address(this).balance);
     }
     
     /**
@@ -242,7 +254,6 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
           );
           
           _current_distributed_balance = _current_distributed_balance.add(tokenbalance);
-          _beneficiary.transfer(msg.value);
 
           _trusted_token.transfer(msg.sender, tokenbalance);
 
