@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity =0.8.2;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Capped.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
@@ -60,13 +60,10 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
         address to,
         uint256 amount
     ) internal override {
-        // if we are not minting or burning tokens, check wether we are
-        // paused or not
-        if (
-            from != address(0) &&
-            (to != address(0) && !hasRole(BURNER_ROLE, _msgSender()))
-        ) {
-            require(!paused(), "GainDAOToken: paused");
+        // mint: always allowed
+        // other transfers: require not paused
+        if (from != address(0)) {
+          require(!paused(), "GainDAOToken: paused");
         }
 
         super._beforeTokenTransfer(from, to, amount);

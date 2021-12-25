@@ -1,31 +1,15 @@
 const { expect } = require("chai");
 
-let expectError = async (promise, expectedError) => {
-  try {
-    await promise;
-  } catch (error) {
-    if (error.message.indexOf(expectedError) === -1) {
-      // When the exception was a revert, the resulting string will include only
-      // the revert reason, otherwise it will be the type of exception (e.g. 'invalid opcode')
-      const actualError = error.message.replace(
-        /Returned error: VM Exception while processing transaction: (revert )?/,
-        '',
-      );
-      expect(actualError).to.equal(expectedError, "Wrong kind of exception received");
-    }
-    return;
-  }
-
-  expect.fail("Expected an error that did not occur");
-}
-
 describe("GainDAOToken", () => {
   let token;
   let deployer;
+  let pauser;
+  let minter;
+  let burner;
   let user;
 
   before(async () => {
-    [deployer, user] = await ethers.getSigners();
+    [deployer, pauser, minter, burner, user] = await ethers.getSigners();
   })
 
   beforeEach(async () => {
@@ -60,6 +44,36 @@ describe("GainDAOToken", () => {
       it("deployer is minter", async () => {
         expect(await token.hasRole(await token.MINTER_ROLE(), deployer.address)).to.be.true;
       })
+      
+      it("test minter role", async () => {
+        const subject = minter.address
+        const role = await token.MINTER_ROLE();
+        expect(await token.hasRole(role, subject), 'role is not assigned by default').to.be.false;
+        await token.connect(deployer).grantRole(role, subject);
+        expect(await token.hasRole(role, subject), 'can grant role').to.be.true;
+        await token.connect(deployer).revokeRole(role, subject);
+        expect(await token.hasRole(role, subject), 'can revoke role').to.be.false;
+      })
+
+      it("test pauser role", async () => {
+        const subject = minter.address
+        const role = await token.PAUSER_ROLE();
+        expect(await token.hasRole(role, subject), 'role is not assigned by default').to.be.false;
+        await token.connect(deployer).grantRole(role, subject);
+        expect(await token.hasRole(role, subject), 'can grant role').to.be.true;
+        await token.connect(deployer).revokeRole(role, subject);
+        expect(await token.hasRole(role, subject), 'can revoke role').to.be.false;
+      })
+
+      it("test burner role", async () => {
+        const subject = minter.address
+        const role = await token.BURNER_ROLE();
+        expect(await token.hasRole(role, subject), 'role is not assigned by default').to.be.false;
+        await token.connect(deployer).grantRole(role, subject);
+        expect(await token.hasRole(role, subject), 'can grant role').to.be.true;
+        await token.connect(deployer).revokeRole(role, subject);
+        expect(await token.hasRole(role, subject), 'can revoke role').to.be.false;
+      })
     })
   })
 
@@ -69,20 +83,24 @@ describe("GainDAOToken", () => {
     })
 
     it("non pauser cannot unpause the token", async () => {
-      await expectError(
-        token.connect(user).unpause(),
-        "GainDAOToken: _msgSender() does not have the pauser role",
-      );
+      let allowed = token.connect(user).unpause()
+      await expect(allowed, 'non pauser cannot unvert the token')
+        .to.be.revertedWith("GainDAOToken: _msgSender() does not have the pauser role");
     })
 
     it("cannot transfer coins when the token is paused", async () => {
-      await expectError(
-        token.connect(user).transfer(deployer.address, 100),
-        "GainDAOToken: paused",
-      );
+      let allowed = token.connect(user).transfer(deployer.address, 100)
+      await expect(allowed, 'cannot transfer coins when the token is paused')
+        .to.be.revertedWith("GainDAOToken: paused");
     })
 
-    it("can mint coins while the token is paused", async () => {
+    it("non minter cannot mint coins", async () => {
+      let allowed = token.connect(user).mint(user.address, 100)
+      await expect(allowed, 'non minter cannot mint coins')
+        .to.be.revertedWith("GainDAOToken: _msgSender() does not have the minter role");
+    })
+
+    it("minter can mint coins while the token is paused", async () => {
       await token.connect(deployer).mint(user.address, 100);
     })
 
@@ -117,41 +135,46 @@ describe("GainDAOToken", () => {
     })
 
     it("non minter cannot mint tokens", async () => {
-      await expectError(
-        token.connect(user).mint(user.address, 100),
-        "GainDAOToken: _msgSender() does not have the minter role",
-      );
+      let allowed = token.connect(user).mint(user.address, 100)
+      await expect(allowed, 'non minter cannot mint tokens')
+        .to.be.revertedWith("GainDAOToken: _msgSender() does not have the minter role");
     })
 
     it("cannot mint more tokens that the cap", async () => {
-      await expectError(
-        token.connect(deployer).mint(deployer.address, (await token.cap()) + 1),
-        "ERC20Capped: cap exceeded"
-      );
+      let allowed = token.connect(deployer).mint(deployer.address, (await token.cap()) + 1)
+      await expect(allowed, 'cannot mint more tokens that the cap')
+        .to.be.revertedWith("ERC20Capped: cap exceeded");
     })
   })
 
   context("burning", () => {
+    it("burner cannot burn tokens when paused", async () => {
+      await token.connect(deployer).mint(deployer.address, 100);
+      let allowed = token.connect(deployer).burn(75)
+      await expect(allowed, 'burner cannot burn tokens when paused')
+        .to.be.revertedWith("GainDAOToken: paused");
+    })
+
     it("burner can burn tokens", async () => {
       await token.connect(deployer).mint(deployer.address, 100);
+      await token.connect(deployer).unpause();
       await token.connect(deployer).burn(75);
       expect(await token.balanceOf(deployer.address)).to.equal(25);
     })
 
     it("non burner cannot burn tokens", async () => {
-      await expectError(
-        token.connect(user).burn(100),
-        "GainDAOToken: _msgSender() does not have the burner role",
-      );
+      let allowed = token.connect(user).burn(100)
+      await expect(allowed, 'non burner cannot burn tokens')
+        .to.be.revertedWith("GainDAOToken: _msgSender() does not have the burner role");
     })
 
     it("cannot burn more tokens that balance", async () => {
       await token.connect(deployer).mint(deployer.address, 100);
+      await token.connect(deployer).unpause();
 
-      await expectError(
-        token.connect(deployer).burn(110),
-        "ERC20: burn amount exceeds balance"
-      );
+      let allowed = token.connect(deployer).burn(110)
+      await expect(allowed, 'non burner cannot burn tokens')
+        .to.be.revertedWith("ERC20: burn amount exceeds balance");
     })
   })
 });
