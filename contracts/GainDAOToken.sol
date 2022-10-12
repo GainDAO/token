@@ -10,9 +10,9 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
-    constructor()
-        ERC20("GainDAO Token", "GAIN")
-        ERC20Capped(42_000_000 * (10**18))
+    constructor(string memory name_, string memory symbol_, uint256 cap_)
+        ERC20(name_, symbol_)
+        ERC20Capped(cap_)
     {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(PAUSER_ROLE, _msgSender());

@@ -1,9 +1,11 @@
-require("@nomiclabs/hardhat-waffle");
+require("@nomicfoundation/hardhat-toolbox");
 require('dotenv').config();
-require("hardhat-gas-reporter");
+//require("hardhat-gas-reporter");
+require("solidity-coverage");
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
+
 task("accounts", "Prints the list of accounts", async () => {
   const accounts = await ethers.getSigners();
 
@@ -11,10 +13,10 @@ task("accounts", "Prints the list of accounts", async () => {
     console.log(account.address);
   }
 });
-
-task("seedphrase", "Prints the current seed phrase", async () => {
-  console.log("seed phrase: %s", process.env.MNEMONIC !== undefined ? process.env.MNEMONIC : "")
-});
+// 
+// task("seedphrase", "Prints the current seed phrase", async () => {
+//   console.log("seed phrase: %s", process.env.MNEMONIC !== undefined ? process.env.MNEMONIC : "")
+// });
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -23,7 +25,7 @@ task("seedphrase", "Prints the current seed phrase", async () => {
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  defaultNetwork: "hardhat",
+  defaultNetwork: "dagobah",
   networks: {
     hardhat: {
       chainId: 1337,
@@ -37,14 +39,6 @@ module.exports = {
           accountsBalance: "1000000000000000000000000000000",
       },
     },
-    testnet: {
-      url: 'http://206.189.99.250:8080',
-      gasPrice: 4000000000000,
-      chainId: 36618,
-      accounts: [
-        "0xe8458a486cf38d360fa05777f988ad32ba6647a81b85364cf68a18981aef9886"
-      ]
-    },
     dagobah: {
       url: `https://dagobah.connectorz.org`,
       chainId: 13321,
@@ -54,24 +48,34 @@ module.exports = {
           process.env.MNEMONIC !== undefined ? process.env.MNEMONIC : "",
       },
     },
-
+    rinkeby: {
+       url: process.env.INFURAENDPOINT_RINKEBY,
+       accounts: {
+         mnemonic:
+           process.env.MNEMONIC !== undefined ? process.env.MNEMONIC : ""
+           // accountsBalance: "1000000000000000000000000000",
+       },
+     },
   },
   solidity: {
     version: "0.8.2",
     settings: {
       optimizer: {
         enabled: true,
-        runs: 300
+        runs: 1000
       }
     },
   },
   gasReporter: {
-    enabled: process.env.REPORT_GAS !== undefined,
-    currency: "USD",
+    enabled: false && process.env.REPORT_GAS !== undefined,
+    currency: "EUR",
     gasPrice: 179,
     coinmarketcap: process.env.COINMARKETCAP,
   },
   etherscan: {
       apiKey: process.env.ETHERSCAN_API_KEY,
   },
+  mocha: {
+    timeout: 15*60*1000
+  },  
 };
