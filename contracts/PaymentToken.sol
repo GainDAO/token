@@ -9,8 +9,8 @@ import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol"
  */
 contract PaymentToken is ERC20PresetMinterPauser {
     address _rejectedAddress;
-    
-    constructor(uint256 initialSupply, address reject) ERC20PresetMinterPauser("Simulated USD", "SIMUSD") {
+
+    constructor(uint256 initialSupply, string memory name_, string memory symbol,  address reject ) ERC20PresetMinterPauser(name_, symbol) {
         _rejectedAddress = reject;
         _mint(msg.sender, initialSupply);
     }

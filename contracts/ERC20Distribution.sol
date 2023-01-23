@@ -22,6 +22,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
  
     event TokensSold(address recipient, uint256 amountToken, uint256 amountEth, uint256 actualRate);
     event DepositReceived(address sender);
+    event kycApproverChanged(address newKYCApprover);
     
     IERC20 public _fiat_token; // Contract address for the payment token
     IERC20 public _trusted_token; // Contract address for the distributed token
@@ -159,8 +160,6 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         'Initial distribution balance must be correct'
         );
         
-      _total_distribution_balance = _trusted_token.balanceOf(address(this));
-
       _unpause();
     }
     
@@ -174,7 +173,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     /**
         * @dev KYC signature check
         */
-    function purchaseAllowed(bytes calldata proof, address from, uint256 validto) public view virtual returns (bool) {
+    function purchaseAllowed(bytes calldata proof, address from, uint256 validto) whenNotPaused public view virtual returns (bool) {
       require(_kyc_approver != address(0),
         "No KYC approver set: unable to validate buyer"
       );
@@ -208,6 +207,8 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       );
         
       _kyc_approver = newKYCApprover;
+
+      emit kycApproverChanged(newKYCApprover);
     }
     
     // After distribution has started, the contract can no longer be paused
@@ -226,16 +227,16 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
             "Currentrate: out of range"
         );
         
-        // Distribution active: ascending fractional linear rate (distribution slope)
-        uint256 rateDelta =
-          _endrate_distribution.sub(_startrate_distribution);
-        uint256 offset_e18 = _current_distributed_balance.add(amountWei.div(2));
-        
-        uint256 currentRate = rateDelta
-            .mul(offset_e18)
-            .div(_total_distribution_balance)
-            .add(_startrate_distribution);
-        return currentRate;
+            // Distribution active: ascending fractional linear rate (distribution slope)
+            uint256 rateDelta =  
+              _endrate_distribution.sub(_startrate_distribution);
+            uint256 offset_e18 = _current_distributed_balance.add(amountWei.div(2));
+
+            uint256 currentRate = rateDelta
+              .mul(offset_e18)
+              .div(_total_distribution_balance)
+              .add(_startrate_distribution);
+            return currentRate;
     }
     
     /**
@@ -248,7 +249,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       );
       
       bool result = _fiat_token.transfer(_beneficiary, _fiat_token.balanceOf(address(this)));
-      require(result==true,
+      require(result,
         "Claim: transfer must succeed"
       );
     }
@@ -277,7 +278,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       }
 
       uint256 actualrate = currentRateUndivided(trustedtoken_amount);
-      assert(actualrate<=limitrate); // current rate is above requested rate
+      require(actualrate<=limitrate); // current rate is below requested rate
       
       uint256 fiattoken_amount = trustedtoken_amount.mul(actualrate).div(_divider_rate);
 
@@ -287,7 +288,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       );
       
       uint256 pool_balance = _trusted_token.balanceOf(address(this));
-      assert(trustedtoken_amount<=pool_balance); // insufficient tokens available in the distribution pool
+      require(trustedtoken_amount<=pool_balance); // insufficient tokens available in the distribution pool
       
       _current_distributed_balance = _current_distributed_balance.add(trustedtoken_amount);
 

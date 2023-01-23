@@ -7,18 +7,12 @@ const {
   MNEMONIC_KYCPROVIDER2,
   ADDRESS_KYCPROVIDER2,
   cMaxTestDuration,
-  gainTokenname,
-  gainTokensymbol,
-  cDistVolume,
-  cDistVolumeWei,
-  cDistStartRate,
-  cDistEndRate,
-  cDistDividerRate,
-  cUSDCVolume
+  cSettingsUGAIN,
+  cSettingsWGAIN
 } = require('./Settings.js');
 
 const { 
-  setupSimUSDToken,
+  setupPaymentToken,
   setupGainDAOToken,
   setupERC20Distribution,
   waitForTxToComplete,
@@ -28,7 +22,7 @@ const {
 } = require('./Library.js');
 
 describe("Launch UGAIN", () => {
-  let simusdtoken;
+  let paymenttoken;
   let token;
   let distribution;
   let deployer;
@@ -38,21 +32,21 @@ describe("Launch UGAIN", () => {
   let user3;
   let rejecteduser;
   
-  const setupContracts = async () => {
+  const setupContracts = async (settings) => {
     [dummy, dummy, dummy, deployer, treasury, pool, user1, user2, user3, rejecteduser] = await ethers.getSigners();
 
     try {
-      simusdtoken = await setupSimUSDToken(deployer, user1, user2, user3, rejecteduser, cUSDCVolume)
-      token = await setupGainDAOToken(deployer, gainTokenname, gainTokensymbol, cDistVolumeWei)
+      paymenttoken = await setupPaymentToken(deployer, user1, user2, user3, rejecteduser, settings.paymentTokenVolume, settings.paymentTokenName)
+      gaintoken = await setupGainDAOToken(deployer, settings.gainTokenname, settings.gainTokensymbol, settings.cDistVolumeWei)
       distribution = await setupERC20Distribution(
         deployer,
-        simusdtoken.address,
-        token.address,
+        paymenttoken.address,
+        gaintoken.address,
         pool.address, // beneficiary account
-        cDistStartRate,
-        cDistEndRate,
-        cDistDividerRate,
-        cDistVolumeWei)
+        settings.cDistStartRate,
+        settings.cDistEndRate,
+        settings.cDistDividerRate,
+        settings.cDistVolumeWei)
     } catch(ex) {
       console.log(ex);
     }
@@ -60,7 +54,11 @@ describe("Launch UGAIN", () => {
     // await distribution.changeKYCApprover(ADDRESS_KYCPROVIDER1);
   }
   
-  it("launches the GainDAO", async ()=>{
-    await setupContracts();
+  it("launches UGAIN", async ()=>{
+    await setupContracts(cSettingsUGAIN);
+  }).timeout(cMaxTestDuration);
+
+  it("launches WGAIN", async () => {
+    await setupContracts(cSettingsWGAIN);
   }).timeout(cMaxTestDuration);
 });

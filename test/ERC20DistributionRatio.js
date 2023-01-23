@@ -3,38 +3,30 @@ const { expect } = require("chai");
 const {
   MNEMONIC_KYCPROVIDER1,
   ADDRESS_KYCPROVIDER1,
-  MNEMONIC_KYCPROVIDER2,
-  ADDRESS_KYCPROVIDER2,
-  cMaxTestDuration,
-  gainTokenname,
-  gainTokensymbol,
-  cDistVolume,
-  cDistVolumeWei,
-  cDistStartRate,
-  cDistEndRate,
-  cDistDividerRate,
-  cUSDCVolume  
+  // MNEMONIC_KYCPROVIDER2,
+  // ADDRESS_KYCPROVIDER2,
+  // cMaxTestDuration,
+  cSettingsUGAIN,
+  cSettingsWGAIN
 } = require('./Settings.js');
 
-const { 
-  setupSimUSDToken,
+const {
+  setupPaymentToken,
   setupGainDAOToken,
   setupERC20Distribution,
   waitForTxToComplete,
-  displayStatus,
+  // displayStatus,
   userBuysGainTokens,
   createProof
 } = require('./Library.js');
 
-const {
-  calculateRateEther,
-  getBuyCyclesByCount,
-  getBuyCyclesByEther
-} = require('./BuyCycles.js')
+// const {
+//   calculateRateEther
+// } = require('./BuyCycles.js')
 
-describe("ERC20Distribution", () => {
-  let simusdtoken;
-  let token;
+const executesRatiosTest = (theSettings) => () => {
+  let paymenttoken;
+  let gaintoken;
   let distribution;
   let deployer;
   let treasury;
@@ -44,54 +36,60 @@ describe("ERC20Distribution", () => {
   let rejecteduser;
   let user1kycproof;
   let user2kycproof;
-  let user3kycproof;  
+  let user3kycproof;
   let rejecteduserkycproof;
-  
-  const setupContracts = async (doInit=true) => {
+
+  const setupContracts = async (settings, doInit = true) => {
     [dummy, dummy, dummy, deployer, treasury, pool, user1, user2, user3, rejecteduser] = await ethers.getSigners();
-    
+
+
+    // console.log("setup contracts for " + settings.gainTokenname)
+
     try {
-      simusdtoken = await setupSimUSDToken(deployer, user1, user2, user3, rejecteduser, cUSDCVolume)
-      token = await setupGainDAOToken(deployer, gainTokenname, gainTokensymbol, cDistVolumeWei)
+      paymenttoken = await setupPaymentToken(deployer, user1, user2, user3, rejecteduser, settings.paymentTokenVolume, settings.paymentTokenName)
+      gaintoken = await setupGainDAOToken(deployer, settings.gainTokenname, settings.gainTokensymbol, settings.cDistVolumeWei)
+      await gaintoken.deployed();
+
       distribution = await setupERC20Distribution(
-        deployer,
-        simusdtoken.address,
-        token.address,
+        deployer, 
+        paymenttoken.address,
+        gaintoken.address,
         pool.address, // beneficiary account
-        cDistStartRate,
-        cDistEndRate,
-        cDistDividerRate,
-        cDistVolumeWei)
-    } catch(ex) {
+        settings.cDistStartRate,
+        settings.cDistEndRate,
+        settings.cDistDividerRate,
+        settings.cDistVolumeWei)
+    } catch (ex) {
       console.error("setupContracts - error ", ex.message);
     }
-    
-    if(doInit) {
-      
+
+
+    if (doInit) {
+
     }
 
-    await token.grantRole(await token.DEFAULT_ADMIN_ROLE(), treasury.address);
-    await token.grantRole(await token.PAUSER_ROLE(), treasury.address);
-    await token.grantRole(await token.MINTER_ROLE(), treasury.address);
-    await token.grantRole(await token.BURNER_ROLE(), treasury.address);
-    
+    await gaintoken.grantRole(await gaintoken.DEFAULT_ADMIN_ROLE(), treasury.address);
+    await gaintoken.grantRole(await gaintoken.PAUSER_ROLE(), treasury.address);
+    await gaintoken.grantRole(await gaintoken.MINTER_ROLE(), treasury.address);
+    await gaintoken.grantRole(await gaintoken.BURNER_ROLE(), treasury.address);
+
     await distribution.grantRole(await distribution.DEFAULT_ADMIN_ROLE(), treasury.address);
     await distribution.grantRole(await distribution.KYCMANAGER_ROLE(), treasury.address);
-    
-    // await token.connect(treasury).revokeRole(token.PAUSER_ROLE(), deployer.address);
-    // await token.connect(treasury).revokeRole(token.MINTER_ROLE(), deployer.address);
-    // await token.connect(treasury).revokeRole(token.BURNER_ROLE(), deployer.address);
-    // await token.connect(treasury).revokeRole(token.DEFAULT_ADMIN_ROLE(), deployer.address);
+
+    // await gaintoken.connect(treasury).revokeRole(gaintoken.PAUSER_ROLE(), deployer.address);
+    // await gaintoken.connect(treasury).revokeRole(gaintoken.MINTER_ROLE(), deployer.address);
+    // await gaintoken.connect(treasury).revokeRole(gaintoken.BURNER_ROLE(), deployer.address);
+    // await gaintoken.connect(treasury).revokeRole(gaintoken.DEFAULT_ADMIN_ROLE(), deployer.address);
     //
     // await distribution.connect(treasury).revokeRole(distribution.KYCMANAGER_ROLE(), deployer.address);
     // await distribution.connect(treasury).revokeRole(distribution.DEFAULT_ADMIN_ROLE(), deployer.address);
-    
-    const tx1 = await token.connect(deployer).mint(distribution.address, cDistVolumeWei);
+
+    const tx1 = await gaintoken.connect(deployer).mint(distribution.address, settings.cDistVolumeWei);
     await waitForTxToComplete(tx1)
-    
+
     const tx2 = await distribution.connect(deployer).startDistribution();
     await waitForTxToComplete(tx2)
-    
+
     const tx3 = await distribution.changeKYCApprover(ADDRESS_KYCPROVIDER1);
     await waitForTxToComplete(tx3)
   }
@@ -100,135 +98,97 @@ describe("ERC20Distribution", () => {
   })
 
   beforeEach(async () => {
-    await setupContracts();
+    await setupContracts(theSettings);
 
     const currentblock = await ethers.provider.getBlockNumber()
     validto = currentblock + 1000;
     user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto);
     user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto);
   })
-  
-  // context("start distribution", async () => {
-  //   it("can receive tokens for distribution", async () => {
-  //     let totalSupply = await token.totalSupply();
-  //     console.log("mint %s tokens to distribution", ethers.utils.formatEther(cDistVolume))
-  //     await token.connect(deployer).mint(distribution.address, cDistVolume);
-  //   })
-  // 
-  //   it("has received the correct amount of tokens", async () => {
-  //     let balance = await token.balanceOf(distribution.address);
-  //     expect(balance).to.equal(cDistVolume);
-  //     console.log("distribution now has %s tokens", ethers.utils.formatEther(balance))
-  //   })
-  // 
-  //   it("distribution can be started", async () => {
-  //     // Transfer initial token amount to the distribution contract
-  //     await distribution.startDistribution();
-  // 
-  //     expect(await distribution.paused()).to.equal(false);
-  //   })
-  // });
-  
-  const distVolume = ethers.utils.formatEther(cDistVolumeWei)
-  const faction = distVolume/2999
 
-  let testcasebase = []
-  const testcases = [];
-  for(i=0;i<12;i++) { testcasebase.push(2**i) }
-  
-  let idx=0;
-  while ((2**idx-1)*faction<distVolume) {
-    const offset = ((2**idx-1)*faction);
-    let gain = ((2**idx)*faction);
-    if(offset+gain>distVolume) {
-      gain = distVolume-offset;
+  const distVolume = ethers.utils.formatEther(theSettings.cDistVolumeWei)
+  const steps = 20;
+  const offsetVolume = Math.round(distVolume / steps, 0);
+  const purchaseVolume = 1;
+  const rateOffset = 1;
+
+  let idx = 0;
+  let testcases = [];
+  for (i = 0; i < steps; i++) {
+    const offset = i * offsetVolume;
+    let gain = 1; // purchaseVolume
+    if (offset + purchaseVolume > distVolume) {
+      gain = distVolume - purchaseVolume;
     }
 
-    testcases.push({offset:offset.toString(), gain: gain.toString()});
-    
+    testcases.push({ offset: offset.toString(), gain: gain.toString(), rateOffset });
+
     idx++;
   }
-  
-  context("ratios",  async ()=>{
+
+  testcases.push({ offset: (distVolume - purchaseVolume).toString(), gain: purchaseVolume.toString(), rateOffset });
+
+
+  context("ratios", async () => {
     // for(const testcase of cases) {
     testcases.forEach(testcase => {
-      it("tests ratio case " + testcase.offset + "/" + testcase.gain, async ()=>{
+      it("tests ratio case " + testcase.offset + "/" + testcase.gain, async () => {
         const currentdistvolume = await distribution.current_distributed_balance();
         const offsetwei = ethers.utils.parseEther(testcase.offset);
-        if(currentdistvolume<offsetwei) {
+        if (currentdistvolume < offsetwei) {
           // buy tokens using user1 account to create offset
           const deltawei = offsetwei.sub(currentdistvolume)
-        
-          await userBuysGainTokens(simusdtoken, distribution, deltawei, undefined, user1, user1kycproof, validto);
-        
-          expect(await token.balanceOf(user1.address), "user 1 bought enough ugain").to.equal(deltawei)
+
+          let currentrateundivided = ethers.BigNumber.from(await distribution.currentRateUndivided(deltawei))
+
+          await userBuysGainTokens(paymenttoken, distribution, deltawei, currentrateundivided, user1, user1kycproof, validto);
+
+          expect(await gaintoken.balanceOf(user1.address), "user 1 bought enough ugain").to.equal(deltawei)
           expect(await distribution.current_distributed_balance(), "distribution at correct offset").to.equal(offsetwei)
-        
+
           // clear offset balance from distribution contract
-          const usdcbalance2 = await simusdtoken.balanceOf(distribution.address);
+          const usdcbalance2 = await paymenttoken.balanceOf(distribution.address);
           const tx2 = await distribution.connect(pool).claimFiatToken();
           await waitForTxToComplete(tx2);
-          expect(await simusdtoken.balanceOf(pool.address), "pool claims usdc offset").to.equal(usdcbalance2)
-          expect(await simusdtoken.balanceOf(distribution.address), "distribution has no balance after claim").to.equal(0)
+          expect(await paymenttoken.balanceOf(pool.address), "pool claims payment token offset").to.equal(usdcbalance2)
+          expect(await paymenttoken.balanceOf(distribution.address), "distribution has no balance after claim").to.equal(0)
         }
-        
-        const divider = await distribution.dividerrate_distribution();
+
         const currentrate = await distribution.currentRateUndivided(ethers.utils.parseEther(testcase.gain));
-        
-        // console.log('ratio - offset %s - gain %s - ratio ', testcase.offset, testcase.gain, currentrate.toString())
-        
+        const limitrate = currentrate.add(testcase.rateOffset)
+
+        const actualratio = currentrate / await distribution.dividerrate_distribution();
+
+        // console.log(`actual rate undivided: ${currentrate} - limit rate undivided ${limitrate} [fiat tokens / distributed token]`);
+        // console.log('volume sold %s - gain to purchase %s - Tokens / WBTC %s - WBTC / Token %s',
+        //   testcase.offset,
+        //   testcase.gain,
+        //   (1 / actualratio).toString(),
+        //   actualratio.toExponential().toString());
+
         const gainwei = ethers.utils.parseEther(testcase.gain);
-        await userBuysGainTokens(simusdtoken, distribution, gainwei, undefined, user2, user2kycproof, validto, true);
-        
-        expect(await token.balanceOf(user2.address), "user 2 bought enough ugain").to.equal(gainwei)
+        await userBuysGainTokens(paymenttoken, distribution, gainwei, limitrate, user2, user2kycproof, validto);
+
+        expect(await gaintoken.balanceOf(user2.address), "user 2 bought enough ugain").to.equal(gainwei)
         const newdistvolume = await distribution.current_distributed_balance();
-        
-        // claim usdc tokens to the treasury
-        const usdcclaim = await simusdtoken.balanceOf(distribution.address);
-        const poolbalance = await simusdtoken.balanceOf(pool.address);
-        // console.log("dist usdc claim is %s", ethers.utils.formatEther(usdcclaim))
+
+        // claim payment token tokens to the treasury
+        const usdcclaim = await paymenttoken.balanceOf(distribution.address);
+        const poolbalance = await paymenttoken.balanceOf(pool.address);
+        // console.log("dist payment token claim is %s", ethers.utils.formatEther(usdcclaim))
         const tx = await distribution.connect(pool).claimFiatToken();
         await waitForTxToComplete(tx);
 
-        expect(await simusdtoken.balanceOf(pool.address), "pool claims usdc").to.equal(usdcclaim.add(poolbalance))
-        expect(await simusdtoken.balanceOf(distribution.address), "no usdc left in distribution").to.equal(0)
-        
-        // await displayStatus(token, simusdtoken, distribution, treasury, `case ${testcase.offset}/${testcase.gain}`, user2)
+        expect(await paymenttoken.balanceOf(pool.address), "pool claims payment token").to.equal(usdcclaim.add(poolbalance))
+        expect(await paymenttoken.balanceOf(distribution.address), "no payment token left in distribution").to.equal(0)
+
+        // await displayStatus(token, paymenttoken, distribution, treasury, `case ${testcase.offset}/${testcase.gain}`, user2)
         // expect(await distribution.current_distributed_balance(), "distribution at correct offset").to.equal()
       })
-    }).timeout(60*1000);
-    
-  //   false && it("checks purchasing", async ()=> {
-  //     let idx = 0;
-  //     let divider = 1;
-  //     let currentrate = 0;
-  //     let newrate = 0;
-  //     let balance = 0;
-  //     let gaintokenswei = ethers.utils.parseEther("0");
-  // 
-  //     gaintokenswei = ethers.utils.parseEther("100");
-  //     balance = await token.balanceOf(distribution.address);
-  //     divider = await distribution.dividerrate_distribution();
-  //     currentrate = await distribution.currentRateUndivided(gaintokenswei);
-  //     console.log()
-  //     await userBuysGainTokens(simusdtoken, distribution,gaintokenswei, undefined, user1, user1kycproof, validto);
-  //     console.log("%s user balance: %s usdc - %s gain [%s/%s]", 
-  //       (idx+1), 
-  //       ethers.utils.formatEther(await simusdtoken.balanceOf(user1.address)),
-  //       ethers.utils.formatEther(await token.balanceOf(user1.address)),
-  //       currentrate.toString(), divider.toString());
-  //     idx++;
-  // 
-  //     // balance = await token.balanceOf(distribution.address);
-  //     // gaintokenswei = "100";
-  //     // currentrate = await distribution.currentRateUndivided(ethers.utils.parseEther(gaintokens));
-  //     // await userBuysGainTokens(simusdtoken, distribution,ethers.utils.parseEther(gaintokens), undefined, user1, user1kycproof, validto);
-  //     // console.log("%s user balance: %s usdc - %s gain [%s]", 
-  //     //   (idx+1), 
-  //     //   ethers.utils.formatEther(await simusdtoken.balanceOf(user1.address)),
-  //     //   ethers.utils.formatEther(await token.balanceOf(user1.address)),
-  //     //   currentrate.toString());
-  //     // idx++;
-  //   }).timeout(60*1000)
+    }).timeout(60 * 1000);
   });
-});
+}
+
+describe("ERC20DistributionRatio - UGAIN", executesRatiosTest(cSettingsUGAIN));
+
+describe("ERC20DistributionRatio - WGAIN", executesRatiosTest(cSettingsWGAIN));
