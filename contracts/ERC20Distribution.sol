@@ -295,7 +295,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       uint256 initfiatbalance = _fiat_token.balanceOf(address(this));
       bool result1 = _fiat_token.transferFrom(msg.sender, address(this), fiattoken_amount);
       require(
-        result1 == true && 
+        result1 && 
           _fiat_token.balanceOf(address(this)) - initfiatbalance == fiattoken_amount,
         "PurchaseTokens: fiat transfer must succeed"
       );
@@ -303,7 +303,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       uint256 inittokenbalance = _trusted_token.balanceOf(address(this));
       bool result2 = _trusted_token.transfer(msg.sender, trustedtoken_amount);
       require(
-        result2==true && 
+        result2 && 
           inittokenbalance - _trusted_token.balanceOf(address(this))==trustedtoken_amount,
         "PurchaseTokens: token transfer must succeed"
       );
