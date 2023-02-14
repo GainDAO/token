@@ -1,5 +1,5 @@
 require("@nomicfoundation/hardhat-toolbox");
-require('dotenv').config();
+require("dotenv").config();
 //require("hardhat-gas-reporter");
 require("solidity-coverage");
 
@@ -13,7 +13,7 @@ task("accounts", "Prints the list of accounts", async () => {
     console.log(account.address);
   }
 });
-// 
+//
 // task("seedphrase", "Prints the current seed phrase", async () => {
 //   console.log("seed phrase: %s", process.env.MNEMONIC !== undefined ? process.env.MNEMONIC : "")
 // });
@@ -31,12 +31,12 @@ module.exports = {
       chainId: 1337,
       mining: {
         auto: true,
-        interval: 5000
+        interval: 5000,
       },
       accounts: {
         mnemonic:
           process.env.MNEMONIC !== undefined ? process.env.MNEMONIC : "",
-          accountsBalance: "1000000000000000000000000000000",
+        accountsBalance: "1000000000000000000000000000000000000",
       },
     },
     dagobah: {
@@ -49,21 +49,21 @@ module.exports = {
       },
     },
     rinkeby: {
-       url: process.env.INFURAENDPOINT_RINKEBY,
-       accounts: {
-         mnemonic:
-           process.env.MNEMONIC !== undefined ? process.env.MNEMONIC : ""
-           // accountsBalance: "1000000000000000000000000000",
-       },
-     },
+      url: process.env.INFURAENDPOINT_RINKEBY,
+      accounts: {
+        mnemonic:
+          process.env.MNEMONIC !== undefined ? process.env.MNEMONIC : "",
+        // accountsBalance: "1000000000000000000000000000",
+      },
+    },
   },
   solidity: {
     version: "0.8.2",
     settings: {
       optimizer: {
         enabled: true,
-        runs: 1000
-      }
+        runs: 1000,
+      },
     },
   },
   gasReporter: {
@@ -73,9 +73,9 @@ module.exports = {
     coinmarketcap: process.env.COINMARKETCAP,
   },
   etherscan: {
-      apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: process.env.ETHERSCAN_API_KEY,
   },
   mocha: {
-    timeout: 15*60*1000
-  },  
+    timeout: 15 * 60 * 1000,
+  },
 };

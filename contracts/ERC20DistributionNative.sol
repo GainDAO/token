@@ -8,12 +8,12 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 
 /**
- * @title ERC20Distribution
+ * @title ERC20DistributionNative
  * @dev A token distribution contract that sells an initial supply of tokens at a
    linearly decreasing exchange rate. After depletion of the initial supply, tokens
    can be recycled and resold at the end rate
  */
-contract ERC20Distribution is Pausable, AccessControlEnumerable {
+contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
@@ -21,25 +21,30 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     bytes32 public constant KYCMANAGER_ROLE = keccak256("KYCMANAGER_ROLE");
  
     event TokensSold(address recipient, uint256 amountToken, uint256 amountEth, uint256 actualRate);
+    event DepositReceived(address sender);
+    event kycApproverChanged(address newKYCApprover);
     
-    IERC20 public _trusted_token;
+    IERC20 public _trusted_token; // Contract address for the distributed token
+
     address payable public _beneficiary;
 
     address public _kyc_approver; // address that signs the KYC approval
 
-    uint256 private _startrate_distribution_e18; // stored internally in high res
-    uint256 private _endrate_distribution_e18;   // stored internally in high res
+    uint256 private _startrate_distribution; // stored internally in high res
+    uint256 private _endrate_distribution;   // stored internally in high res
+    uint256 private _divider_rate;   // scaling factor for start and end rate
     
     uint256 private _total_distribution_balance;  // total volume of initial distribution
     uint256 private _current_distributed_balance; // total volume sold upto now
 
     /**
      * @dev Creates a distribution contract that sells any ERC20 _trusted_token to the
-     * beneficiary, based on a linear exchange rate
+     * beneficiary using an ERC20 as fiat currency, based on a ascending linear exchange rate
      * @param distToken address of the token contract whose tokens are distributed
      * @param distBeneficiary address of the beneficiary to whom received Ether is sent
-     * @param distStartRate exchange rate at start of distribution
+     * @param distStartRate exchange rate at start of distribution 
      * @param distEndRate exhange rate at the end of distribution
+     * @param dividerRate scale factor that is to be applied to the start/end rate
      * @param distVolumeTokens total distribution volume
     */
     constructor(
@@ -47,6 +52,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         address payable distBeneficiary,
         uint256 distStartRate,
         uint256 distEndRate,
+        uint256 dividerRate,
         uint256 distVolumeTokens
     ) {
         require(
@@ -60,8 +66,13 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         );
 
         require(
-            distStartRate > distEndRate,
-            "TokenDistribution: start rate should be > end rate"
+            distStartRate < distEndRate,
+            "TokenDistribution: start rate should be smaller than end rate"
+        );
+        
+        require(
+          dividerRate > 0,
+          "TokenDistribution: rate divider must be larger than zero"
         );
         
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -70,8 +81,9 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         _trusted_token = distToken;
         _beneficiary = distBeneficiary;
         
-        _startrate_distribution_e18  = distStartRate * (10**18);
-        _endrate_distribution_e18  = distEndRate * (10**18);
+        _startrate_distribution  = distStartRate;
+        _endrate_distribution  = distEndRate;
+        _divider_rate = dividerRate;
         
         _total_distribution_balance = distVolumeTokens;
         _current_distributed_balance = 0;
@@ -84,14 +96,21 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         * @dev standard getter for startrate_distribution (tokens/ETH)
         */
     function startrate_distribution() public view virtual returns (uint256) {
-      return _startrate_distribution_e18 / (10**18);
+      return _startrate_distribution;
     }
 
     /**
         * @dev standard getter for endrate_distribution (tokens/ETH)
         */
     function endrate_distribution() public view virtual returns (uint256) {
-      return _endrate_distribution_e18 / (10**18);
+      return _endrate_distribution;
+    }
+
+    /**
+        * @dev standard getter for divider_rate (no unit)
+        */
+    function dividerrate_distribution() public view virtual returns (uint256) {
+      return _divider_rate;
     }
 
     /**
@@ -117,8 +136,6 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         'Initial distribution balance must be correct'
         );
         
-      _total_distribution_balance = _trusted_token.balanceOf(address(this));
-
       _unpause();
     }
     
@@ -132,7 +149,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     /**
         * @dev KYC signature check
         */
-    function purchaseAllowed(bytes calldata proof, address from, uint256 validto) public view virtual returns (bool) {
+    function purchaseAllowed(bytes calldata proof, address from, uint256 validto) whenNotPaused public view virtual returns (bool) {
       require(_kyc_approver != address(0),
         "No KYC approver set: unable to validate buyer"
       );
@@ -166,6 +183,8 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       );
         
       _kyc_approver = newKYCApprover;
+
+      emit kycApproverChanged(newKYCApprover);
     }
     
     // After distribution has started, the contract can no longer be paused
@@ -173,90 +192,91 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     //     require(hasRole(PAUSER_ROLE, _msgSender()));
     //     _pause();
     // }
-
+    
     /**
         * @dev Function that calculates the current distribution rate based
-        * on the inital distribution volume and the remaining volume.
+        * on the inital distribution volume, the remaining volume and the
+        * amount of erc20 tokens to be bought
         */
-    function currentRate() public view returns (uint256) {
-        if(paused()) {
-          // fixed rate (initial distribution slope)
-          // return _startrate_distribution_e18 / (10**18);
-          return 0;
-        }
+    function currentRateUndivided(uint256 amountWei) public view returns (uint256) {
+        require(_current_distributed_balance + amountWei <= _total_distribution_balance,
+            "Currentrate: out of range"
+        );
         
-        if(_current_distributed_balance<_total_distribution_balance) {
-          // Distribution active: fractional linear rate (distribution slope)
-          uint256 rateDelta_e18 =
-            _startrate_distribution_e18.sub(_endrate_distribution_e18);
-          uint256 offset_e18 =
-            _total_distribution_balance.sub(_current_distributed_balance);
-          uint256 currentRate_e18 =
-            _endrate_distribution_e18
-            .add(rateDelta_e18.mul(offset_e18)
-            .div(_total_distribution_balance));
-          return currentRate_e18 / (10**18);
-        } else {
-          // distribution ended
-          return 0;
-        }
+            // Distribution active: ascending fractional linear rate (distribution slope)
+            uint256 rateDelta =  
+              _endrate_distribution.sub(_startrate_distribution);
+            uint256 offset_e18 = _current_distributed_balance.add(amountWei.div(2));
+
+            uint256 currentRate = rateDelta
+              .mul(offset_e18)
+              .div(_total_distribution_balance)
+              .add(_startrate_distribution);
+            return currentRate;
     }
     
     /**
-        * @dev Function that allows the beneficiary the retrieve
-              the current ether balance from the distribution contract
+        * @dev Function that allows the beneficiary to retrieve
+              the current fiat balance from the distribution contract
         */
-    function claim() public {
+    function claimFiatToken() public {
       require(msg.sender==_beneficiary,
-          "Claim: only the beneficiary can claim funds from the distribution contract"
+          "Claim: only the beneficiary can claim fiat token funds from the distribution contract"
       );
       
+      // bool result = _fiat_token.transfer(_beneficiary, _fiat_token.balanceOf(address(this)));
+      // require(result,
+      //   "Claim: transfer must succeed"
+      // );
       _beneficiary.transfer(address(this).balance);
     }
     
     /**
         * @dev Function that is used to purchase tokens at the given rate.
           Calculates total number of tokens that can be bought for the given Ether
-          value, transfers the tokens to the sender. Transfers the received
           Ether to the benificiary address
+        * @param trustedtoken_amount number of gain tokens to purchase (wei)
         * @param limitrate purchase tokens only at this rate or above
         * @param proof proof data for kyc validation
         * @param validTo expiry block for kyc proof
         */
-        function purchaseTokens(
-          uint256 limitrate,
-          bytes calldata proof,
-          uint256 validTo) public payable {
-          
-          // anyone but contract admins must pass kyc
-          if(hasRole(DEFAULT_ADMIN_ROLE, _msgSender())==false) {
-            require(
-              purchaseAllowed(proof, msg.sender, validTo),
-              "Buyer did not pass KYC procedure"
-            );
-          }
+    function purchaseTokens(
+      uint256 trustedtoken_amount,
+      uint256 limitrate,
+      bytes calldata proof,
+      uint256 validTo) public payable {
+      
+      // anyone but contract admins must pass kyc
+      if(hasRole(DEFAULT_ADMIN_ROLE, _msgSender())==false) {
+        require(
+          purchaseAllowed(proof, msg.sender, validTo),
+          "Buyer did not pass KYC procedure"
+        );
+      }
 
-          uint256 actualrate = currentRate();
-          require(actualrate>0,
-            "unable to sell at the given rate: distribution has ended"
-          );
+      uint256 actualrate = currentRateUndivided(trustedtoken_amount);
+      require(actualrate<=limitrate); // current rate is below requested rate
+      
+      uint256 fiattoken_amount = trustedtoken_amount.mul(actualrate).div(_divider_rate);
 
-          require(
-            actualrate>=limitrate,
-            "unable to sell: current rate is below requested rate"
-          );
-          
-          uint256 tokenbalance = msg.value.mul(actualrate);
-          
-          uint256 pool_balance = _trusted_token.balanceOf(address(this));
-          require(tokenbalance<=pool_balance,
-            "insufficient tokens available in the distribution pool"
-          );
-          
-          _current_distributed_balance = _current_distributed_balance.add(tokenbalance);
+      uint256 pool_balance = _trusted_token.balanceOf(address(this));
+      require(trustedtoken_amount<=pool_balance); // insufficient tokens available in the distribution pool
+      
+      _current_distributed_balance = _current_distributed_balance.add(trustedtoken_amount);
+ 
+      require(
+        msg.value >= fiattoken_amount,
+        "PurchaseTokens: transaction value must be sufficient"
+      );
 
-          _trusted_token.transfer(msg.sender, tokenbalance);
+      uint256 inittokenbalance = _trusted_token.balanceOf(address(this));
+      bool result2 = _trusted_token.transfer(msg.sender, trustedtoken_amount);
+      require(
+        result2 && 
+          inittokenbalance - _trusted_token.balanceOf(address(this))==trustedtoken_amount,
+        "PurchaseTokens: token transfer must succeed"
+      );
 
-          emit TokensSold(msg.sender, msg.value, tokenbalance, actualrate);
-        }
+      emit TokensSold(msg.sender, msg.value, trustedtoken_amount, actualrate);
     }
+  }

@@ -6,18 +6,16 @@ const {
   MNEMONIC_KYCPROVIDER2,
   ADDRESS_KYCPROVIDER2,
   cMaxTestDuration,
-  cSettingsUGAIN,
-  cSettingsWGAIN,
+  cSettingsETH,
 } = require("./Settings.js");
 
 const {
-  setupPaymentToken,
   setupGainDAOToken,
-  setupERC20Distribution,
+  setupDistributionNative,
   waitForTxToComplete,
   // displayStatus,
   calculateRateUndivided,
-  userBuysGainTokens,
+  userBuysGainTokensNative,
   createProof,
 } = require("./Library.js");
 
@@ -30,7 +28,6 @@ const {
 const fastmode = true;
 
 const doExecuteTest = (theSettings) => () => {
-  let paymenttoken;
   let gaintoken;
   let deployer;
   let treasury;
@@ -55,24 +52,14 @@ const doExecuteTest = (theSettings) => () => {
     ] = await ethers.getSigners();
 
     try {
-      paymenttoken = await setupPaymentToken(
-        deployer,
-        user1,
-        user2,
-        user3,
-        rejecteduser,
-        theSettings.paymentTokenVolume,
-        theSettings.paymentTokenName
-      );
       gaintoken = await setupGainDAOToken(
         deployer,
         theSettings.gainTokenname,
         theSettings.gainTokensymbol,
         theSettings.cDistVolumeWei
       );
-      distribution = await setupERC20Distribution(
+      distribution = await setupDistributionNative(
         deployer,
-        paymenttoken.address,
         gaintoken.address,
         pool.address, // beneficiary account
         settings.cDistStartRate,
@@ -104,7 +91,6 @@ const doExecuteTest = (theSettings) => () => {
     for (let idx = 0; idx < buyCycles.length; idx++) {
       const cycle = buyCycles[idx];
 
-      let balance;
       let currentrateundivided;
       let currentblock;
       let validto;
@@ -167,8 +153,7 @@ const doExecuteTest = (theSettings) => () => {
             cycle.tokens_wei
           );
           const tokens = ethers.utils.formatEther(cycle.tokens_wei);
-          const result = await userBuysGainTokens(
-            paymenttoken,
+          const result = await userBuysGainTokensNative(
             distribution,
             cycle.tokens_wei,
             rateundivided.sub("1"),
@@ -182,17 +167,17 @@ const doExecuteTest = (theSettings) => () => {
         }
       });
 
-      it(`${name} - is able to buy at or above current rate`, async () => {
+      it(`${name} - is able to buy at current rate`, async () => {
+        // was at or above  current rate
         const rateundivided = await distribution.currentRateUndivided(
           cycle.tokens_wei
         );
-        let ratewithslippage =
-          idx % 2 === 0 ? rateundivided : rateundivided.add(1);
-        const result = await userBuysGainTokens(
-          paymenttoken,
+        // let ratewithslippage = idx % 2 === 0 ? rateundivided : rateundivided.add(1);
+        let rate = rateundivided;
+        const result = await userBuysGainTokensNative(
           distribution,
           cycle.tokens_wei,
-          ratewithslippage,
+          rate,
           user,
           proof,
           validto
@@ -205,16 +190,13 @@ const doExecuteTest = (theSettings) => () => {
         expect(balance2).to.equal(cycle.tokenbalance_end_wei);
       });
 
-      it(`${name} - end ERC20 balance is correct`, async () => {
-        let paymenttokenbalance = await paymenttoken.balanceOf(
-          distribution.address
-        );
-        expect(paymenttokenbalance).to.equal(cycle.pool_balance_end_wei);
+      it(`${name} - end ETH balance is correct`, async () => {
+        let ethbalance = await ethers.provider.getBalance(distribution.address);
+        expect(ethbalance).to.equal(cycle.pool_balance_end_wei);
       });
 
       it(`${name} - transaction with invalid KYC proof fails`, async () => {
-        const result = await userBuysGainTokens(
-          paymenttoken,
+        const result = await userBuysGainTokensNative(
           distribution,
           cycle.tokens_wei,
           cycle.rateundivided,
@@ -227,8 +209,7 @@ const doExecuteTest = (theSettings) => () => {
       });
 
       it(`${name} - transaction with expired KYC proof fails`, async () => {
-        const result = await userBuysGainTokens(
-          paymenttoken,
+        const result = await userBuysGainTokensNative(
           distribution,
           cycle.tokens_wei,
           cycle.rateundivided,
@@ -251,22 +232,40 @@ const doExecuteTest = (theSettings) => () => {
         "non pool user is not able to claim fiat tokens from the contract"
       ).to.be.reverted;
     });
+
     it(`${name} - it is able to claim all ERC20 from the distribution contract`, async () => {
       try {
-        dist_start = await paymenttoken.balanceOf(distribution.address);
-        pool_start = await paymenttoken.balanceOf(pool.address);
-        await distribution.connect(pool).claimFiatToken();
-        dist_end = await paymenttoken.balanceOf(distribution.address);
-        pool_end = await paymenttoken.balanceOf(pool.address);
+        dist_start = await ethers.provider.getBalance(distribution.address);
+        pool_start = await ethers.provider.getBalance(pool.address);
+        const tx = await distribution.connect(pool).claimFiatToken();
+        dist_end = await ethers.provider.getBalance(distribution.address);
+        pool_end = await ethers.provider.getBalance(pool.address);
         pool_delta = pool_end.sub(pool_start);
         dist_delta = dist_end.sub(dist_start);
 
-        // console.log("claimERC20 - dist", dist_start, dist_end, dist_delta);
-        // console.log("claimERC20 - pool", pool_start, pool_end, pool_delta);
+        const receipt = await tx.wait();
+
+        // console.log(
+        //   "claimERC20 - dist",
+        //   dist_start.toString(),
+        //   dist_end.toString(),
+        //   dist_delta.toString()
+        // );
+        // console.log(
+        //   "claimERC20 - pool",
+        //   pool_start.toString(),
+        //   pool_end.toString(),
+        //   pool_delta.toString()
+        // );
+        // console.log(
+        //   "claimERC20 - delta",
+        //   pool_delta.add(dist_delta).toString()
+        // );
+        const gas = receipt.cumulativeGasUsed.mul(receipt.effectiveGasPrice);
 
         expect(pool_delta).to.be.gt(0);
         expect(dist_delta).to.be.lt(0);
-        expect(pool_delta.add(dist_delta)).to.equal(0);
+        expect(dist_delta.add(pool_delta).add(gas)).to.equal(0);
       } catch (ex) {
         console.error(
           "it is able to claim all ERC20 from the distribution contract - error",
@@ -277,8 +276,7 @@ const doExecuteTest = (theSettings) => () => {
     // });
   }; // executeBuyCycles
 
-  describe("ERC20Distribution - Various tests related to distribution contract creation", () => {
-    let paymenttoken;
+  describe("ERC20DistributionNative - Various tests related to distribution contract creation", () => {
     let token;
     let deployer;
     let treasury;
@@ -302,16 +300,6 @@ const doExecuteTest = (theSettings) => () => {
         rejecteduser,
       ] = await ethers.getSigners();
 
-      paymenttoken = await setupPaymentToken(
-        deployer,
-        user1,
-        user2,
-        user3,
-        rejecteduser,
-        theSettings.paymentTokenVolume,
-        theSettings.paymentTokenName
-      );
-
       gaintoken = await setupGainDAOToken(
         deployer,
         theSettings.gainTokenname,
@@ -322,11 +310,10 @@ const doExecuteTest = (theSettings) => () => {
 
     it("cannot use zero address as benificiary", async () => {
       // deploy distribution contract
-      const ERC20Distribution = await ethers.getContractFactory(
-        "ERC20Distribution"
+      const ERC20DistributionNative = await ethers.getContractFactory(
+        "ERC20DistributionNative"
       );
-      let distribution1 = ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
+      let distribution1 = ERC20DistributionNative.connect(deployer).deploy(
         gaintoken.address,
         ethers.constants.AddressZero,
         theSettings.cDistStartRate,
@@ -341,11 +328,10 @@ const doExecuteTest = (theSettings) => () => {
 
     it("distribution start rate cannot be zero or less", async () => {
       // deploy distribution contract
-      const ERC20Distribution = await ethers.getContractFactory(
-        "ERC20Distribution"
+      const ERC20DistributionNative = await ethers.getContractFactory(
+        "ERC20DistributionNative"
       );
-      let distribution1 = ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
+      let distribution1 = ERC20DistributionNative.connect(deployer).deploy(
         gaintoken.address,
         pool.address,
         ethers.BigNumber.from("0"),
@@ -362,11 +348,10 @@ const doExecuteTest = (theSettings) => () => {
 
     it("distribution divider rate tests", async () => {
       // deploy distribution contract
-      const ERC20Distribution = await ethers.getContractFactory(
-        "ERC20Distribution"
+      const ERC20DistributionNative = await ethers.getContractFactory(
+        "ERC20DistributionNative"
       );
-      let distribution1 = ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
+      let distribution1 = ERC20DistributionNative.connect(deployer).deploy(
         gaintoken.address,
         pool.address,
         theSettings.cDistStartRate,
@@ -383,12 +368,11 @@ const doExecuteTest = (theSettings) => () => {
 
     it("distribution end rate conditions", async () => {
       // deploy distribution contract
-      const ERC20Distribution = await ethers.getContractFactory(
-        "ERC20Distribution"
+      const ERC20DistributionNative = await ethers.getContractFactory(
+        "ERC20DistributionNative"
       );
 
-      let distribution1 = ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
+      let distribution1 = ERC20DistributionNative.connect(deployer).deploy(
         gaintoken.address,
         pool.address,
         theSettings.cDistStartRate,
@@ -402,8 +386,7 @@ const doExecuteTest = (theSettings) => () => {
         "distribution start rate cannot be zero or less"
       ).to.be.reverted;
 
-      let distribution2 = ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
+      let distribution2 = ERC20DistributionNative.connect(deployer).deploy(
         gaintoken.address,
         pool.address,
         theSettings.cDistStartRate,
@@ -417,8 +400,7 @@ const doExecuteTest = (theSettings) => () => {
         "distribution start rate cannot be equal to end rate"
       ).to.be.reverted;
 
-      let distribution3 = ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
+      let distribution3 = ERC20DistributionNative.connect(deployer).deploy(
         gaintoken.address,
         pool.address,
         theSettings.cDistEndRate,
@@ -435,11 +417,12 @@ const doExecuteTest = (theSettings) => () => {
 
     it("edge cases", async () => {
       // added to achieve 100% code coverage
-      const ERC20Distribution = await ethers.getContractFactory(
-        "ERC20Distribution"
+      const ERC20DistributionNative = await ethers.getContractFactory(
+        "ERC20DistributionNative"
       );
-      let distribution1 = await ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
+      let distribution1 = await ERC20DistributionNative.connect(
+        deployer
+      ).deploy(
         gaintoken.address,
         pool.address,
         theSettings.cDistStartRate,
@@ -456,12 +439,10 @@ const doExecuteTest = (theSettings) => () => {
         "rejected pool user is not able to claim fiat tokens from the contract"
       ).to.be.reverted;
 
-      // added to achieve 100% code coverage
-      expect(await paymenttoken.decimals()).to.be.equal(18);
-
       // detect invalid distribution volume
-      let distribution2 = await ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
+      let distribution2 = await ERC20DistributionNative.connect(
+        deployer
+      ).deploy(
         gaintoken.address,
         pool.address,
         theSettings.cDistStartRate,
@@ -480,7 +461,7 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
-  describe("ERC20Distribution - Various tests related to distribution start", () => {
+  describe("ERC20DistributionNative - Various tests related to distribution start", () => {
     beforeEach(async () => {
       await setupContracts(theSettings, false);
     });
@@ -515,7 +496,7 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
-  describe("ERC20Distribution - Various tests related to distribution end", () => {
+  describe("ERC20DistributionNative - Various tests related to distribution end", () => {
     beforeEach(async () => {
       await setupContracts(theSettings, true);
     });
@@ -529,7 +510,7 @@ const doExecuteTest = (theSettings) => () => {
       const one = ethers.BigNumber.from("1");
       const two = ethers.BigNumber.from("2");
 
-      const value1 = distribution.currentRateUndivided(ntokenstobuy); // Gain / SimUSD
+      const value1 = distribution.currentRateUndivided(ntokenstobuy);
       await expect(value1, "Can get rate for full distribution at once").not.to
         .be.reverted;
 
@@ -544,17 +525,19 @@ const doExecuteTest = (theSettings) => () => {
       );
       const buyrateundivided = await distribution.currentRateUndivided(
         ntokenstobuy
-      ); // Gain / SimUSD
+      );
       expect(
         buyrateundivided,
         "purchase rate must be correct for full distribution"
       ).to.equal(buyratecalculated);
 
       const fiat_value = ntokenstobuy.mul(buyrateundivided).div(divider);
-      const txapprove = await paymenttoken
-        .connect(user1)
-        .approve(distribution.address, fiat_value);
-      await waitForTxToComplete(txapprove);
+
+      // console.log(
+      //   "@@@@ buying tokens at %s for fiat value %s",
+      //   buyratecalculated.div(divider).toString(),
+      //   fiat_value
+      // );
 
       const currentblock = await ethers.provider.getBlockNumber();
       const validto = currentblock + 100000;
@@ -565,7 +548,13 @@ const doExecuteTest = (theSettings) => () => {
       );
       const txpurchase = await distribution
         .connect(user1)
-        .purchaseTokens(ntokenstobuy, buyrateundivided, user1kycproof, validto);
+        .purchaseTokens(
+          ntokenstobuy,
+          buyrateundivided,
+          user1kycproof,
+          validto,
+          { value: fiat_value }
+        );
       await waitForTxToComplete(txpurchase);
 
       let value5 = distribution.currentRateUndivided(zero);
@@ -582,7 +571,7 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
-  describe("ERC20Distribution - Various tests related to ether handling", () => {
+  describe("ERC20DistributionNative - Various tests related to ether handling", () => {
     beforeEach(async () => {
       try {
         await setupContracts(theSettings, true);
@@ -600,209 +589,151 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
-  describe("ERC20Distribution - Distribute SIMUSD", () => {
-    beforeEach(async () => {
-      await setupContracts(theSettings, false);
-    });
+  describe(
+    "ERC20DistributionNative - Purchase " + theSettings.gainTokenname,
+    () => {
+      let validto;
+      let user1kycproof;
+      let rejecteduserkycproof;
 
-    it("has funded the test accounts with USD", async () => {
-      expect(await paymenttoken.balanceOf(user1.address)).to.equal(
-        ethers.utils.parseEther("42000000001"),
-        "user 1 funding failed"
-      );
-      expect(await paymenttoken.balanceOf(user2.address)).to.equal(
-        ethers.utils.parseEther("42000000002"),
-        "user 2 funding failed"
-      );
-      expect(await paymenttoken.balanceOf(user3.address)).to.equal(
-        ethers.utils.parseEther("42000000003"),
-        "user 3 funding failed"
-      );
-    });
-  });
+      beforeEach(async () => {
+        try {
+          await setupContracts(theSettings, false);
 
-  describe("ERC20Distribution - Purchase " + theSettings.gainTokenname, () => {
-    let validto;
-    let user1kycproof;
-    let rejecteduserkycproof;
+          const txmint = await gaintoken
+            .connect(deployer)
+            .mint(distribution.address, theSettings.cDistVolumeWei);
+          await waitForTxToComplete(txmint);
 
-    beforeEach(async () => {
-      try {
-        await setupContracts(theSettings, false);
+          const txstart = await distribution.startDistribution();
+          await waitForTxToComplete(txstart);
 
-        const txmint = await gaintoken
-          .connect(deployer)
-          .mint(distribution.address, theSettings.cDistVolumeWei);
-        await waitForTxToComplete(txmint);
+          const txapprover = await distribution.changeKYCApprover(
+            ADDRESS_KYCPROVIDER1
+          );
+          await waitForTxToComplete(txapprover);
 
-        const txstart = await distribution.startDistribution();
-        await waitForTxToComplete(txstart);
-
-        const txapprover = await distribution.changeKYCApprover(
-          ADDRESS_KYCPROVIDER1
-        );
-        await waitForTxToComplete(txapprover);
-
-        const currentblock = await ethers.provider.getBlockNumber();
-        validto = currentblock + 1000;
-        user1kycproof = await createProof(
-          MNEMONIC_KYCPROVIDER1,
-          user1,
-          validto
-        );
-        rejecteduserkycproof = await createProof(
-          MNEMONIC_KYCPROVIDER1,
-          rejecteduser,
-          validto
-        );
-      } catch (ex) {
-        console.error(
-          `ERC20Distribution - Purchase ${theSettings.gainTokenname} - beforeEach - error ${ex.message}`
-        );
-      }
-    });
-
-    it("user 1 can purchase " + theSettings.gainTokenname, async () => {
-      const amount_tokens_str = "1500000"; // buy 150000 ugain
-
-      const ntokenstobuy = ethers.utils.parseEther(amount_tokens_str);
-      const divider = await distribution.dividerrate_distribution();
-      const buyrateundivided = await distribution.currentRateUndivided(
-        ntokenstobuy
-      ); // Gain / SimUSD
-
-      // console.log("cdb:", ethers.utils.formatEther(await distribution.current_distributed_balance()));
-      // console.log("tdb:", ethers.utils.formatEther(await distribution.total_distribution_balance()));
-      // console.log("got buyrate %s/%s", buyrateundivided, divider);
-
-      expect(buyrateundivided, "unable to calculate current rate").to.be.gt(0);
-
-      // set insufficient allowance
-      const fiat_value_insufficient = ntokenstobuy
-        .sub(1)
-        .mul(buyrateundivided)
-        .div(divider);
-
-      const tx1 = await paymenttoken
-        .connect(user1)
-        .approve(distribution.address, fiat_value_insufficient);
-      await waitForTxToComplete(tx1);
-      expect(
-        await distribution.connect(user1).fiattoken_allowance(),
-        "user 1 set fiat allowance failed"
-      ).to.equal(fiat_value_insufficient);
-      await expect(
-        distribution
-          .connect(user1)
-          .purchaseTokens(
-            ntokenstobuy,
-            buyrateundivided,
-            user1kycproof,
+          const currentblock = await ethers.provider.getBlockNumber();
+          validto = currentblock + 1000;
+          user1kycproof = await createProof(
+            MNEMONIC_KYCPROVIDER1,
+            user1,
             validto
-          ),
-        "must have sufficient allowance"
-      ).to.be.rejected;
-
-      // set sufficient allowance
-      const fiat_value = ntokenstobuy.mul(buyrateundivided).div(divider);
-
-      // console.log("buy %s gain for %s simusd @ %s/%s",
-      //   ethers.utils.formatEther(ntokenstobuy),
-      //   ethers.utils.formatEther(fiat_value),
-      //   buyrateundivided, divider);
-
-      const tx2 = await paymenttoken
-        .connect(user1)
-        .approve(distribution.address, fiat_value);
-      await waitForTxToComplete(tx2);
-      expect(
-        await distribution.connect(user1).fiattoken_allowance(),
-        "user 1 set fiat allowance failed"
-      ).to.equal(fiat_value);
-
-      await expect(
-        distribution
-          .connect(user1)
-          .purchaseTokens(
-            ntokenstobuy,
-            buyrateundivided,
-            user1kycproof,
+          );
+          rejecteduserkycproof = await createProof(
+            MNEMONIC_KYCPROVIDER2,
+            rejecteduser,
             validto
-          ),
-        "usd amount does not match expected value"
-      ).to.changeTokenBalance(paymenttoken, user1, fiat_value.mul(-1));
-      expect(
-        await token.balanceOf(user1.address),
-        "user 1 purchase tokens failed"
-      ).to.equal(ntokenstobuy);
+          );
+        } catch (ex) {
+          console.error(
+            `ERC20DistributionNative - Purchase ${theSettings.gainTokenname} - beforeEach - error ${ex.message}`
+          );
+        }
+      });
 
-      const user1_balance_token = await paymenttoken.balanceOf(user1.address);
-      const user1_balance_contract = await distribution
-        .connect(user1)
-        .user_fiattoken_balance();
-      expect(
-        user1_balance_token,
-        "contract reports same balance as token for user balance"
-      ).to.be.equal(user1_balance_contract);
+      it("user 1 can purchase " + theSettings.gainTokenname, async () => {
+        const amount_tokens_str = "1500000"; // buy 150000 tokens
 
-      const dist_balance_token = await paymenttoken.balanceOf(
-        distribution.address
-      );
-      const dist_balance_contract = await distribution
-        .connect(user1)
-        .fiattoken_contractbalance();
-      expect(
-        dist_balance_token,
-        "contract reports same balance as token for contract balance"
-      ).to.be.equal(dist_balance_contract);
-    }).timeout(cMaxTestDuration); // it
+        const ntokenstobuy = ethers.utils.parseEther(amount_tokens_str);
+        const divider = await distribution.dividerrate_distribution();
+        const buyrateundivided = await distribution.currentRateUndivided(
+          ntokenstobuy
+        );
 
-    it("rejected user cannot purchase uGAIN", async () => {
-      const amount_tokens_str = "1500000"; // buy 150000 ugain
+        // console.log("cdb:", ethers.utils.formatEther(await distribution.current_distributed_balance()));
+        // console.log("tdb:", ethers.utils.formatEther(await distribution.total_distribution_balance()));
+        // console.log("got buyrate %s/%s", buyrateundivided, divider);
 
-      const ntokenstobuy = ethers.utils.parseEther(amount_tokens_str);
-      const divider = await distribution.dividerrate_distribution();
-      const buyrateundivided = await distribution.currentRateUndivided(
-        ntokenstobuy
-      ); // Gain / SimUSD
+        expect(buyrateundivided, "unable to calculate current rate").to.be.gt(
+          0
+        );
 
-      // console.log("cdb:", ethers.utils.formatEther(await distribution.current_distributed_balance()));
-      // console.log("tdb:", ethers.utils.formatEther(await distribution.total_distribution_balance()));
-      // console.log("got buyrate %s/%s", buyrateundivided, divider);
+        // set insufficient allowance
+        const fiat_value_insufficient = ntokenstobuy
+          .sub(1)
+          .mul(buyrateundivided)
+          .div(divider);
 
-      expect(buyrateundivided, "unable to calculate current rate").to.be.gt(0);
+        await expect(
+          distribution
+            .connect(user1)
+            .purchaseTokens(
+              ntokenstobuy,
+              buyrateundivided,
+              user1kycproof,
+              validto,
+              { value: fiat_value_insufficient }
+            ),
+          "eth amount does not match expected value"
+        ).to.be.reverted;
 
-      const fiat_value = ntokenstobuy.mul(buyrateundivided).div(divider);
+        const fiat_value = ntokenstobuy.mul(buyrateundivided).div(divider);
 
-      // console.log("buy %s gain for %s simusd @ %s/%s",
-      //   ethers.utils.formatEther(ntokenstobuy),
-      //   ethers.utils.formatEther(fiat_value),
-      //   buyrateundivided, divider);
+        // console.log("buy %s gain for %s eth @ %s/%s",
+        //   ethers.utils.formatEther(ntokenstobuy),
+        //   ethers.utils.formatEther(fiat_value),
+        //   buyrateundivided, divider);
 
-      const tx1 = await paymenttoken
-        .connect(rejecteduser)
-        .approve(distribution.address, fiat_value);
-      await waitForTxToComplete(tx1);
-      expect(
-        await distribution.connect(rejecteduser).fiattoken_allowance(),
-        "rejected user set fiat allowance failed"
-      ).to.equal(fiat_value);
+        await expect(
+          distribution
+            .connect(user1)
+            .purchaseTokens(
+              ntokenstobuy,
+              buyrateundivided,
+              user1kycproof,
+              validto,
+              { value: fiat_value }
+            ),
+          "eth amount does not match expected value"
+        ).to.changeEtherBalance(user1, fiat_value.mul(-1));
+        expect(
+          await token.balanceOf(user1.address),
+          "user 1 purchase tokens failed"
+        ).to.equal(ntokenstobuy);
+      }).timeout(cMaxTestDuration); // it
 
-      await expect(
-        distribution
-          .connect(rejecteduser)
-          .purchaseTokens(
-            ntokenstobuy,
-            buyrateundivided,
-            rejecteduserkycproof,
-            validto
-          ),
-        "rejected user should not be able to purchase tokens"
-      ).to.be.rejected;
-    }).timeout(cMaxTestDuration); // it
-  }).timeout(cMaxTestDuration);
+      it("rejected user cannot purchase tokens", async () => {
+        const amount_tokens_str = "1500000"; // buy 150000 tokens
 
-  describe("ERC20Distribution - Assign Roles to Treasury", () => {
+        const ntokenstobuy = ethers.utils.parseEther(amount_tokens_str);
+        const divider = await distribution.dividerrate_distribution();
+        const buyrateundivided = await distribution.currentRateUndivided(
+          ntokenstobuy
+        );
+
+        // console.log("cdb:", ethers.utils.formatEther(await distribution.current_distributed_balance()));
+        // console.log("tdb:", ethers.utils.formatEther(await distribution.total_distribution_balance()));
+        // console.log("got buyrate %s/%s", buyrateundivided, divider);
+
+        expect(buyrateundivided, "unable to calculate current rate").to.be.gt(
+          0
+        );
+
+        const fiat_value = ntokenstobuy.mul(buyrateundivided).div(divider);
+
+        // console.log("buy %s gain for %s eth @ %s/%s",
+        //   ethers.utils.formatEther(ntokenstobuy),
+        //   ethers.utils.formatEther(fiat_value),
+        //   buyrateundivided, divider);
+
+        await expect(
+          distribution
+            .connect(rejecteduser)
+            .purchaseTokens(
+              ntokenstobuy,
+              buyrateundivided,
+              rejecteduserkycproof,
+              validto,
+              { value: fiat_value }
+            ),
+          "rejected user should not be able to purchase tokens"
+        ).to.be.rejected;
+      }).timeout(cMaxTestDuration); // it
+    }
+  ).timeout(cMaxTestDuration);
+
+  describe("ERC20DistributionNative - Assign Roles to Treasury", () => {
     beforeEach(async () => {
       await setupContracts(theSettings, true);
     });
@@ -855,7 +786,7 @@ const doExecuteTest = (theSettings) => () => {
       ));
   });
 
-  describe("ERC20Distribution - Remove roles from deployer", () => {
+  describe("ERC20DistributionNative - Remove roles from deployer", () => {
     beforeEach(async () => {
       await setupContracts(theSettings, true);
     });
@@ -920,7 +851,7 @@ const doExecuteTest = (theSettings) => () => {
       ));
   });
 
-  describe("ERC20Distribution - KYC", () => {
+  describe("ERC20DistributionNative - KYC", () => {
     beforeEach(async () => {
       await setupContracts(theSettings, false);
     });
@@ -965,8 +896,7 @@ const doExecuteTest = (theSettings) => () => {
         buyamountwei
       );
 
-      await userBuysGainTokens(
-        paymenttoken,
+      await userBuysGainTokensNative(
         distribution,
         buyamountwei,
         undefined,
@@ -989,8 +919,7 @@ const doExecuteTest = (theSettings) => () => {
       );
 
       // // can buy with kyc approver set
-      await userBuysGainTokens(
-        paymenttoken,
+      await userBuysGainTokensNative(
         distribution,
         buyamountwei,
         undefined,
@@ -1275,7 +1204,7 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
-  describe("ERC20Distribution - Token distribution", () => {
+  describe("ERC20DistributionNative - Token distribution", () => {
     let validto;
     let user1kycproof;
     let user2kycproof;
@@ -1362,8 +1291,7 @@ const doExecuteTest = (theSettings) => () => {
       let buyamount = "1";
       let buyamountwei = ethers.utils.parseEther(buyamount);
 
-      const result = await userBuysGainTokens(
-        paymenttoken,
+      const result = await userBuysGainTokensNative(
         distribution,
         buyamountwei,
         undefined,
@@ -1387,7 +1315,7 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
-  describe("ERC20Distribution - Slippage", () => {
+  describe("ERC20DistributionNative - Slippage", () => {
     let validto;
     let user1kycproof;
     let user2kycproof;
@@ -1409,8 +1337,7 @@ const doExecuteTest = (theSettings) => () => {
           buyamountwei
         );
 
-        await userBuysGainTokens(
-          paymenttoken,
+        await userBuysGainTokensNative(
           distribution,
           buyamountwei,
           undefined,
@@ -1440,8 +1367,7 @@ const doExecuteTest = (theSettings) => () => {
       let currentrateundivided = await distribution.currentRateUndivided(
         startvolumewei
       );
-      await userBuysGainTokens(
-        paymenttoken,
+      await userBuysGainTokensNative(
         distribution,
         startvolumewei,
         undefined,
@@ -1462,11 +1388,13 @@ const doExecuteTest = (theSettings) => () => {
         nextamount
       );
       expect(nextrateundivided).to.equal(predictednextrate);
+      // expect(nextrateundivided).to.equal(
+      //   calculateRateUndivided(theSettings, "150000", nextamount)
+      // );
 
       // calculate a worse rate
       let worserate = nextrateundivided.add("10000");
-      await userBuysGainTokens(
-        paymenttoken,
+      await userBuysGainTokensNative(
         distribution,
         nextamountwei,
         worserate,
@@ -1495,8 +1423,7 @@ const doExecuteTest = (theSettings) => () => {
       let currentrateundivided = await distribution.currentRateUndivided(
         startvolumewei
       );
-      await userBuysGainTokens(
-        paymenttoken,
+      await userBuysGainTokensNative(
         distribution,
         startvolumewei,
         undefined,
@@ -1517,8 +1444,7 @@ const doExecuteTest = (theSettings) => () => {
 
       // someone buys tokens / changes rate before buy transaction is completed
       let dummyvolumewei = ethers.utils.parseEther("15000");
-      await userBuysGainTokens(
-        paymenttoken,
+      await userBuysGainTokensNative(
         distribution,
         dummyvolumewei,
         undefined,
@@ -1528,8 +1454,7 @@ const doExecuteTest = (theSettings) => () => {
       );
 
       // attempt to buy at original rate
-      const result = await userBuysGainTokens(
-        paymenttoken,
+      const result = await userBuysGainTokensNative(
         distribution,
         nextamountwei,
         nextrateundivided,
@@ -1541,7 +1466,7 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
-  describe("ERC20Distribution buycycles - small amounts at the start of distribution (fixed token amount)", async () => {
+  describe("ERC20DistributionNative buycycles - small amounts at the start of distribution (fixed token amount)", async () => {
     before(async () => {
       await setupContracts(theSettings, true);
     });
@@ -1559,7 +1484,7 @@ const doExecuteTest = (theSettings) => () => {
     await executeBuyCycles("small amounts/start", buyCycles);
   }).timeout(cMaxTestDuration); // it
 
-  describe("ERC20Distribution buycycles - small amounts at the tail of distribution (fixed token amount)", async () => {
+  describe("ERC20DistributionNative buycycles - small amounts at the tail of distribution (fixed token amount)", async () => {
     before(async () => {
       await setupContracts(theSettings, true);
     });
@@ -1576,7 +1501,7 @@ const doExecuteTest = (theSettings) => () => {
     await executeBuyCycles("small amounts/end", buyCycles);
   }).timeout(cMaxTestDuration); // describe
 
-  describe("ERC20Distribution buycycles - medium amounts across the entire distribution (fixed token amount)", async () => {
+  describe("ERC20DistributionNative buycycles - medium amounts across the entire distribution (fixed token amount)", async () => {
     before(async () => {
       await setupContracts(theSettings, true);
     });
@@ -1593,7 +1518,7 @@ const doExecuteTest = (theSettings) => () => {
     await executeBuyCycles("medium amounts/full", buyCycles);
   }).timeout(cMaxTestDuration); // describe
 
-  describe("ERC20Distribution buycycles - random amounts across the entire distribution", async () => {
+  describe("ERC20DistributionNative buycycles - random amounts across the entire distribution", async () => {
     before(async () => {
       await setupContracts(theSettings, true);
     });
@@ -1617,6 +1542,4 @@ const doExecuteTest = (theSettings) => () => {
   }).timeout(cMaxTestDuration); // describe
 };
 
-// describe("ERC20Distribution UGAIN", doExecuteTest(cSettingsUGAIN));
-
-describe("ERC20Distribution WGAIN", doExecuteTest(cSettingsWGAIN));
+describe("ERC20DistributionNative", doExecuteTest(cSettingsETH));
