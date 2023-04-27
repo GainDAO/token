@@ -20,21 +20,20 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
     
     bytes32 public constant KYCMANAGER_ROLE = keccak256("KYCMANAGER_ROLE");
  
-    event TokensSold(address recipient, uint256 amountToken, uint256 amountEth, uint256 actualRate);
-    event DepositReceived(address sender);
+    event TokensSold(address recipient, uint256 amountEth, uint256 amountToken, uint256 actualRate);
     event kycApproverChanged(address newKYCApprover);
     
-    IERC20 public _trusted_token; // Contract address for the distributed token
+    IERC20 public immutable _trusted_token; // Contract address for the distributed token
 
-    address payable public _beneficiary;
+    address payable private immutable _beneficiary;
 
     address public _kyc_approver; // address that signs the KYC approval
 
-    uint256 private _startrate_distribution; // stored internally in high res
-    uint256 private _endrate_distribution;   // stored internally in high res
-    uint256 private _divider_rate;   // scaling factor for start and end rate
+    uint256 private immutable _startrate_distribution; // stored internally in high res
+    uint256 private immutable _endrate_distribution;   // stored internally in high res
+    uint256 private immutable _divider_rate;   // scaling factor for start and end rate
     
-    uint256 private _total_distribution_balance;  // total volume of initial distribution
+    uint256 private immutable _total_distribution_balance;  // total volume of initial distribution
     uint256 private _current_distributed_balance; // total volume sold upto now
 
     /**
@@ -93,56 +92,58 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
     }
     
     /**
+        * @dev standard getter for beneficiary (address)
+        */
+    function beneficiary() external view virtual returns (address) {
+      return _beneficiary;
+    }
+
+    /**
         * @dev standard getter for startrate_distribution (tokens/ETH)
         */
-    function startrate_distribution() public view virtual returns (uint256) {
+    function startrate_distribution() external view virtual returns (uint256) {
       return _startrate_distribution;
     }
 
     /**
         * @dev standard getter for endrate_distribution (tokens/ETH)
         */
-    function endrate_distribution() public view virtual returns (uint256) {
+    function endrate_distribution() external view virtual returns (uint256) {
       return _endrate_distribution;
     }
 
     /**
         * @dev standard getter for divider_rate (no unit)
         */
-    function dividerrate_distribution() public view virtual returns (uint256) {
+    function dividerrate_distribution() external view virtual returns (uint256) {
       return _divider_rate;
     }
 
     /**
       * @dev standard getter for total_distribution_balance
       */
-    function total_distribution_balance() public view virtual returns (uint256) {
+    function total_distribution_balance() external view virtual returns (uint256) {
       return _total_distribution_balance;
     }
     
     /**
         * @dev standard getter for current_distribution_balance (ETH)
         */
-    function current_distributed_balance() public view virtual returns (uint256) {
+    function current_distributed_balance() external view virtual returns (uint256) {
       return _current_distributed_balance;
     }
 
     /**
         * @dev Function that starts distribution.
         */
-    function startDistribution() whenPaused public payable {
-      require(
-        _trusted_token.balanceOf(address(this))==_total_distribution_balance,
-        'Initial distribution balance must be correct'
-        );
-        
+    function startDistribution() whenPaused external  {
       _unpause();
     }
     
     /**
         * @dev Getter for the distribution state.
         */
-    function distributionStarted() public view virtual returns (bool) {
+    function distributionStarted() external view virtual returns (bool) {
       return !paused();
     }
     
@@ -176,7 +177,7 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
     /**
         * @dev Function that sets a new KYC Approver address
         */
-    function changeKYCApprover(address newKYCApprover) public {
+    function changeKYCApprover(address newKYCApprover) external {
       require(
           hasRole(KYCMANAGER_ROLE, _msgSender()),
           "KYC: _msgSender() does not have the KYC manager role"
@@ -219,7 +220,7 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
         * @dev Function that allows the beneficiary to retrieve
               the current fiat balance from the distribution contract
         */
-    function claimFiatToken() public {
+    function claimFiatToken() external {
       require(msg.sender==_beneficiary,
           "Claim: only the beneficiary can claim fiat token funds from the distribution contract"
       );
@@ -244,7 +245,7 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
       uint256 trustedtoken_amount,
       uint256 limitrate,
       bytes calldata proof,
-      uint256 validTo) public payable {
+      uint256 validTo) external payable {
       
       // anyone but contract admins must pass kyc
       if(hasRole(DEFAULT_ADMIN_ROLE, _msgSender())==false) {
