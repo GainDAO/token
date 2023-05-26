@@ -77,8 +77,8 @@ const cSettingsWGAIN = {
 // const cDistEndRate = ethers.BigNumber.from(1);
 
 const cDigitsETH = {
-  cPrecisionDigits: 0, // number of digits of precision returned
-  cShiftCommaDigits: 9, // actual start/end rates are (given rate / 10^cShiftCommaDigits)
+  cPrecisionDigits: 3, // number of digits of precision returned
+  cShiftCommaDigits: 6, // actual start/end rates are (given rate / 10^cShiftCommaDigits)
 };
 
 const cSettingsETH = {
@@ -93,10 +93,10 @@ const cSettingsETH = {
     10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
   ),
   cDistStartRate: ethers.BigNumber.from(
-    33334 * 10 ** cDigitsETH.cShiftCommaDigits
+    33334 * 10 ** cDigitsETH.cShiftCommaDigits // 1/3000 Eth/Token
   ).mul(10 ** cDigitsETH.cPrecisionDigits),
   cDistEndRate: ethers.BigNumber.from(
-    10 ** 6 * 10 ** cDigitsETH.cShiftCommaDigits
+    10 ** 6 * 10 ** cDigitsETH.cShiftCommaDigits // 1 Eth/Token
   ).mul(10 ** cDigitsETH.cPrecisionDigits),
 };
 

@@ -8,10 +8,10 @@ const {
   ADDRESS_KYCPROVIDER2,
   cMaxTestDuration,
   cSettingsUGAIN,
-  cSettingsWGAIN
-} = require('./Settings.js');
+  cSettingsWGAIN,
+} = require("./Settings.js");
 
-const { 
+const {
   setupPaymentToken,
   setupGainDAOToken,
   setupERC20Distribution,
@@ -19,7 +19,7 @@ const {
   // displayStatus,
   // userSpendsEther,
   // createProof
-} = require('./Library.js');
+} = require("./Library.js");
 
 describe("Launch UGAIN", () => {
   let paymenttoken;
@@ -31,13 +31,37 @@ describe("Launch UGAIN", () => {
   let user2;
   let user3;
   let rejecteduser;
-  
+
   const setupContracts = async (settings) => {
-    [dummy, dummy, dummy, deployer, treasury, pool, user1, user2, user3, rejecteduser] = await ethers.getSigners();
+    [
+      dummy,
+      dummy,
+      dummy,
+      deployer,
+      treasury,
+      pool,
+      user1,
+      user2,
+      user3,
+      rejecteduser,
+    ] = await ethers.getSigners();
 
     try {
-      paymenttoken = await setupPaymentToken(deployer, user1, user2, user3, rejecteduser, settings.paymentTokenVolume, settings.paymentTokenName)
-      gaintoken = await setupGainDAOToken(deployer, settings.gainTokenname, settings.gainTokensymbol, settings.cDistVolumeWei)
+      paymenttoken = await setupPaymentToken(
+        deployer,
+        user1,
+        user2,
+        user3,
+        rejecteduser,
+        settings.paymentTokenVolume,
+        settings.paymentTokenName
+      );
+      gaintoken = await setupGainDAOToken(
+        deployer,
+        settings.gainTokenname,
+        settings.gainTokensymbol,
+        settings.cDistVolumeWei
+      );
       distribution = await setupERC20Distribution(
         deployer,
         paymenttoken.address,
@@ -46,15 +70,16 @@ describe("Launch UGAIN", () => {
         settings.cDistStartRate,
         settings.cDistEndRate,
         settings.cDistDividerRate,
-        settings.cDistVolumeWei)
-    } catch(ex) {
+        settings.cDistVolumeWei
+      );
+    } catch (ex) {
       console.log(ex);
     }
-    
+
     // await distribution.changeKYCApprover(ADDRESS_KYCPROVIDER1);
-  }
-  
-  it("launches UGAIN", async ()=>{
+  };
+
+  it("launches UGAIN", async () => {
     await setupContracts(cSettingsUGAIN);
   }).timeout(cMaxTestDuration);
 

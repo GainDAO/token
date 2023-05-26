@@ -237,13 +237,12 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
           Calculates total number of tokens that can be bought for the given Ether
           Ether to the benificiary address
         * @param trustedtoken_amount number of gain tokens to purchase (wei)
-        * @param limitrate purchase tokens only at this rate or above
         * @param proof proof data for kyc validation
         * @param validTo expiry block for kyc proof
         */
     function purchaseTokens(
       uint256 trustedtoken_amount,
-      uint256 limitrate,
+      uint256 purchaserate,
       bytes calldata proof,
       uint256 validTo) external payable {
       
@@ -256,9 +255,10 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
       }
 
       uint256 actualrate = currentRateUndivided(trustedtoken_amount);
-      require(actualrate<=limitrate); // current rate is below requested rate
+      require(actualrate<=purchaserate, "actual rate has worsened");
+      require(purchaserate<=actualrate.mul(110).div(100), "Max. 10% slippage allowed"); 
       
-      uint256 fiattoken_amount = trustedtoken_amount.mul(actualrate).div(_divider_rate);
+      uint256 fiattoken_amount = trustedtoken_amount.mul(purchaserate).div(_divider_rate);
 
       uint256 pool_balance = _trusted_token.balanceOf(address(this));
       require(trustedtoken_amount<=pool_balance); // insufficient tokens available in the distribution pool
@@ -266,8 +266,8 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
       _current_distributed_balance = _current_distributed_balance.add(trustedtoken_amount);
  
       require(
-        msg.value >= fiattoken_amount,
-        "PurchaseTokens: transaction value must be sufficient"
+        msg.value == fiattoken_amount,
+        "PurchaseTokens: transaction value must be correct"
       );
 
       uint256 inittokenbalance = _trusted_token.balanceOf(address(this));
@@ -278,6 +278,6 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
         "PurchaseTokens: token transfer must succeed"
       );
 
-      emit TokensSold(msg.sender, msg.value, trustedtoken_amount, actualrate);
+      emit TokensSold(msg.sender, msg.value, trustedtoken_amount, purchaserate);
     }
   }
