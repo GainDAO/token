@@ -232,7 +232,8 @@ const userBuysGainTokens = async (
 
     verbose &&
       console.log("ngaintobuy %s", ethers.utils.formatEther(amountgainwei));
-    verbose && console.log("buyrate %s/%s", rateundivided, divider);
+    verbose &&
+      console.log("buyrate %s/%s paymenttoken/gain", rateundivided, divider);
     verbose &&
       console.log(
         "valuepaymenttoken %s",

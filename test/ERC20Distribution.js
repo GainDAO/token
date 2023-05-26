@@ -27,7 +27,9 @@ const {
   formatBuyCycles,
 } = require("./BuyCycles.js");
 
-const fastmode = true;
+const fastmode = false;
+
+const doBuyCycles = true;
 
 const doExecuteTest = (theSettings) => () => {
   let paymenttoken;
@@ -460,23 +462,24 @@ const doExecuteTest = (theSettings) => () => {
       expect(await paymenttoken.decimals()).to.be.equal(18);
 
       // detect invalid distribution volume
-      let distribution2 = await ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
-        gaintoken.address,
-        pool.address,
-        theSettings.cDistStartRate,
-        theSettings.cDistEndRate,
-        theSettings.cDistDividerRate,
-        theSettings.cDistVolumeWei
-      );
+      // 2023/5/3 - condition was relaxed, no longer applicable
+      // let distribution2 = await ERC20Distribution.connect(deployer).deploy(
+      //   paymenttoken.address,
+      //   gaintoken.address,
+      //   pool.address,
+      //   theSettings.cDistStartRate,
+      //   theSettings.cDistEndRate,
+      //   theSettings.cDistDividerRate,
+      //   theSettings.cDistVolumeWei
+      // );
 
-      await distribution2.deployed();
+      // await distribution2.deployed();
 
-      let result2 = distribution2.startDistribution();
-      await expect(
-        result2,
-        "Cannot start distribution with invalid distribution balance"
-      ).to.be.rejected;
+      // let result2 = distribution2.startDistribution();
+      // await expect(
+      //   result2,
+      //   "Cannot start distribution with invalid distribution balance"
+      // ).to.be.rejected;
     });
   });
 
@@ -521,8 +524,6 @@ const doExecuteTest = (theSettings) => () => {
     });
 
     it("has expected exchange rate after distribution end", async () => {
-      const amount_tokens_str = theSettings.cDistVolumeWei.toString();
-
       const ntokenstobuy = theSettings.cDistVolumeWei;
       const divider = await distribution.dividerrate_distribution();
       const zero = ethers.BigNumber.from("0");
@@ -597,6 +598,22 @@ const doExecuteTest = (theSettings) => () => {
         value: ethers.utils.parseEther("0.1"),
       });
       await expect(txsend, "contract should not accept ether").to.be.reverted;
+    });
+
+    it("beneficiary can claim ether from the contract", async () => {
+      let tx = distribution.connect(pool).claimNativeToken();
+      await expect(
+        tx,
+        "beneficiary should be able to claim ether from the contract"
+      ).not.to.be.reverted;
+    });
+
+    it("non-beneficiary can't claim ether from the contract", async () => {
+      let tx = distribution.connect(user1).claimNativeToken();
+      await expect(
+        tx,
+        "non beneficiary should not be able to claim ether from the contract"
+      ).to.be.reverted;
     });
   });
 
@@ -1310,7 +1327,7 @@ const doExecuteTest = (theSettings) => () => {
     });
 
     it("initialization - has correct beneficiary", async () => {
-      expect(await distribution._beneficiary()).to.equal(pool.address);
+      expect(await distribution.beneficiary()).to.equal(pool.address);
     });
 
     it("initialization - has correct start rate", async () => {
@@ -1401,45 +1418,37 @@ const doExecuteTest = (theSettings) => () => {
       user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto);
     });
 
-    false &&
-      it("it is possible to buy at the current rate", async () => {
-        let buyamount = "3002";
-        let buyamountwei = ethers.utils.parseEther(buyamount);
-        let currentrateundivided = await distribution.currentRateUndivided(
-          buyamountwei
-        );
+    it("it is possible to buy at the current rate", async () => {
+      let buyamount = "3002";
+      let buyamountwei = ethers.utils.parseEther(buyamount);
 
-        await userBuysGainTokens(
-          paymenttoken,
-          distribution,
-          buyamountwei,
-          undefined,
-          user1,
-          user1kycproof,
-          validto
-        );
-        let balanceafter = await gaintoken.balanceOf(user1.address);
-        expect(balanceafter).to.equal(buyamountwei);
-      });
+      await userBuysGainTokens(
+        paymenttoken,
+        distribution,
+        buyamountwei,
+        undefined,
+        user1,
+        user1kycproof,
+        validto
+      );
+      let balanceafter = await gaintoken.balanceOf(user1.address);
+      expect(balanceafter).to.equal(buyamountwei);
+    });
 
-    false &&
-      it("calculates its own rate", () => {
-        const singletest = (offset, amount) => {
-          const r = calculateRateUndivided(theSettings, offset, amount);
-          // console.log(`${offset}/${amount} - %s [%s/%s]`, r/theSettings.cDistDividerRate, r, theSettings.cDistDividerRate, );
-        };
-        singletest("500000", "0");
-        singletest("500000", "1000");
-        singletest("500000", "5000");
-        singletest("150000", "1000");
-      });
+    it("calculates its own rate", () => {
+      const singletest = (offset, amount) => {
+        const r = calculateRateUndivided(theSettings, offset, amount);
+        // console.log(`${offset}/${amount} - %s [%s/%s]`, r/theSettings.cDistDividerRate, r, theSettings.cDistDividerRate, );
+      };
+      singletest("500000", "0");
+      singletest("500000", "1000");
+      singletest("500000", "5000");
+      singletest("150000", "1000");
+    });
 
-    it("it is possible to buy at a worse rate than current rate", async () => {
+    it("it is possible to buy at a worse rate than current rate (<= 10% slippage)", async () => {
       // set dist offset to 150000
       let startvolumewei = ethers.utils.parseEther("150000");
-      let currentrateundivided = await distribution.currentRateUndivided(
-        startvolumewei
-      );
       await userBuysGainTokens(
         paymenttoken,
         distribution,
@@ -1449,6 +1458,11 @@ const doExecuteTest = (theSettings) => () => {
         user1kycproof,
         validto
       );
+
+      expect(
+        await gaintoken.balanceOf(user1.address),
+        "Initial purchase must succeed"
+      ).to.equal(ethers.utils.parseEther("150000"));
 
       // calculate actual rate
       let nextamount = "1000";
@@ -1461,10 +1475,13 @@ const doExecuteTest = (theSettings) => () => {
         "150000",
         nextamount
       );
-      expect(nextrateundivided).to.equal(predictednextrate);
+      expect(
+        nextrateundivided,
+        "Mismatch between predicted and calculated next rate after inial purchase"
+      ).to.equal(predictednextrate);
 
-      // calculate a worse rate
-      let worserate = nextrateundivided.add("10000");
+      // calculate a 10% worse rate
+      let worserate = nextrateundivided.mul("110").div(100);
       await userBuysGainTokens(
         paymenttoken,
         distribution,
@@ -1483,18 +1500,73 @@ const doExecuteTest = (theSettings) => () => {
         "151000",
         nextamount
       );
-      expect(nextrateundivided).to.equal(predictednextrate);
+      expect(nextrateundivided).to.equal(
+        predictednextrate,
+        "predected rate after purchase does not match expected rate"
+      );
 
       let balance = await gaintoken.balanceOf(user1.address);
-      expect(balance).to.equal(startvolumewei.add(nextamountwei));
+      expect(
+        balance,
+        "Purchase at worse rate (<= 10% slippage) must succeed"
+      ).to.equal(startvolumewei.add(nextamountwei));
     });
 
-    it("it is not possible to buy when the rate has worsened", async () => {
+    it("it is not possible to buy at a worse rate then current rate with > 10% slippage", async () => {
       // set dist offset to 150000
       let startvolumewei = ethers.utils.parseEther("150000");
       let currentrateundivided = await distribution.currentRateUndivided(
         startvolumewei
       );
+      const tx = await userBuysGainTokens(
+        paymenttoken,
+        distribution,
+        startvolumewei,
+        undefined,
+        user1,
+        user1kycproof,
+        validto
+      );
+
+      expect(
+        await gaintoken.balanceOf(user1.address),
+        "Initial purchase must succeed"
+      ).to.equal(ethers.utils.parseEther("150000"));
+
+      // calculate actual rate
+      let nextamount = "1000";
+      let nextamountwei = ethers.utils.parseEther(nextamount);
+      let nextrateundivided = await distribution.currentRateUndivided(
+        nextamountwei
+      );
+      let predictednextrate = calculateRateUndivided(
+        theSettings,
+        "150000",
+        nextamount
+      );
+      expect(
+        nextrateundivided,
+        "Mismatch between predicted and calculated next rate after inial purchase"
+      ).to.equal(predictednextrate);
+
+      // calculate a 10% worse rate
+      let worserate = nextrateundivided.mul("110").div(100).add(1);
+      const result = await userBuysGainTokens(
+        paymenttoken,
+        distribution,
+        nextamountwei,
+        worserate,
+        user1,
+        user1kycproof,
+        validto
+      );
+      expect(result).to.equal(false);
+    });
+
+    it("it is not possible to buy when the rate has worsened", async () => {
+      // set dist offset to 150000
+      let startvolumewei = ethers.utils.parseEther("150000");
+
       await userBuysGainTokens(
         paymenttoken,
         distribution,
@@ -1541,7 +1613,152 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
+  describe("ERC20Distribution - TokensSold Event", () => {
+    let validto, user1kycproof;
+    before(async () => {
+      await setupContracts(theSettings, true);
+      currentblock = await ethers.provider.getBlockNumber();
+      validto = currentblock + 100000;
+      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto);
+    });
+
+    it("it emits correct TokensSold event", async () => {
+      const amountgainwei = ethers.utils.parseEther("2998");
+
+      const divider = await distribution.dividerrate_distribution();
+      const rateundivided = await distribution.currentRateUndivided(
+        amountgainwei
+      );
+      const valuepaymenttoken = amountgainwei.mul(rateundivided).div(divider);
+
+      const tx1 = await paymenttoken
+        .connect(user1)
+        .approve(distribution.address, valuepaymenttoken);
+      await waitForTxToComplete(tx1);
+
+      const tx2 = await expect(
+        distribution
+          .connect(user1)
+          .purchaseTokens(amountgainwei, rateundivided, user1kycproof, validto)
+      )
+        .to.emit(
+          distribution,
+          "TokensSold",
+          "address",
+          "uint256",
+          "uint256",
+          "uint256"
+        )
+        .withArgs(
+          user1.address,
+          valuepaymenttoken,
+          amountgainwei,
+          rateundivided
+        );
+    });
+
+    it("it emits correct TokensSold event (extra payment token included)", async () => {
+      const amountgainwei = ethers.utils.parseEther("2998");
+      const extrapaymenttokenwei = ethers.utils.parseEther("0.05");
+
+      const divider = await distribution.dividerrate_distribution();
+      const rateundivided = await distribution.currentRateUndivided(
+        amountgainwei
+      );
+      const valuepaymenttoken = amountgainwei.mul(rateundivided).div(divider);
+      const valuepaymenttokenwithextraeth =
+        valuepaymenttoken.add(extrapaymenttokenwei);
+
+      const tx1 = await paymenttoken
+        .connect(user1)
+        .approve(distribution.address, valuepaymenttokenwithextraeth);
+      await waitForTxToComplete(tx1);
+
+      const tx2 = await expect(
+        distribution
+          .connect(user1)
+          .purchaseTokens(amountgainwei, rateundivided, user1kycproof, validto)
+      )
+        .to.emit(
+          distribution,
+          "TokensSold",
+          "address",
+          "uint256",
+          "uint256",
+          "uint256"
+        )
+        .withArgs(
+          user1.address,
+          valuepaymenttoken, // extra fiat token is not claimed
+          amountgainwei,
+          rateundivided
+        );
+    });
+
+    it("it emits correct TokensSold event (slippage)", async () => {
+      const amountgainwei = ethers.utils.parseEther("2998");
+
+      const divider = await distribution.dividerrate_distribution();
+      const rateundivided = await distribution.currentRateUndivided(
+        amountgainwei
+      );
+      const worserateundivided = rateundivided.add(
+        ethers.BigNumber.from("100")
+      );
+      const valuepaymenttoken = amountgainwei.mul(rateundivided).div(divider);
+
+      const tx1 = await paymenttoken
+        .connect(user1)
+        .approve(distribution.address, valuepaymenttoken);
+      await waitForTxToComplete(tx1);
+
+      const tx2 = await expect(
+        distribution
+          .connect(user1)
+          .purchaseTokens(
+            amountgainwei,
+            worserateundivided,
+            user1kycproof,
+            validto
+          )
+      )
+        .to.emit(
+          distribution,
+          "TokensSold",
+          "address",
+          "uint256",
+          "uint256",
+          "uint256"
+        )
+        .withArgs(
+          user1.address,
+          valuepaymenttoken, // extra fiat token is not claimed
+          amountgainwei,
+          rateundivided // actual rate is used
+        );
+    });
+  });
+
+  describe("ERC20Distribution - kycApproverChanged Event", () => {
+    before(async () => {
+      await setupContracts(theSettings, true);
+    });
+
+    it("it emits correct kycApproverChanged event", async () => {
+      const tx = await expect(
+        distribution.connect(deployer).changeKYCApprover(user2.address)
+      )
+        .to.emit(distribution, "kycApproverChanged", "address")
+        .withArgs(user2.address);
+    });
+  });
+
   describe("ERC20Distribution buycycles - small amounts at the start of distribution (fixed token amount)", async () => {
+    if (doBuyCycles === false) {
+      console.log("buycycle testing disabled");
+      return;
+    }
+
     before(async () => {
       await setupContracts(theSettings, true);
     });
@@ -1560,6 +1777,11 @@ const doExecuteTest = (theSettings) => () => {
   }).timeout(cMaxTestDuration); // it
 
   describe("ERC20Distribution buycycles - small amounts at the tail of distribution (fixed token amount)", async () => {
+    if (doBuyCycles === false) {
+      console.log("buycycle testing disabled");
+      return;
+    }
+
     before(async () => {
       await setupContracts(theSettings, true);
     });
@@ -1577,6 +1799,11 @@ const doExecuteTest = (theSettings) => () => {
   }).timeout(cMaxTestDuration); // describe
 
   describe("ERC20Distribution buycycles - medium amounts across the entire distribution (fixed token amount)", async () => {
+    if (doBuyCycles === false) {
+      console.log("buycycle testing disabled");
+      return;
+    }
+
     before(async () => {
       await setupContracts(theSettings, true);
     });
@@ -1594,6 +1821,11 @@ const doExecuteTest = (theSettings) => () => {
   }).timeout(cMaxTestDuration); // describe
 
   describe("ERC20Distribution buycycles - random amounts across the entire distribution", async () => {
+    if (doBuyCycles === false) {
+      console.log("buycycle testing disabled");
+      return;
+    }
+
     before(async () => {
       await setupContracts(theSettings, true);
     });
@@ -1617,6 +1849,6 @@ const doExecuteTest = (theSettings) => () => {
   }).timeout(cMaxTestDuration); // describe
 };
 
-// describe("ERC20Distribution UGAIN", doExecuteTest(cSettingsUGAIN));
+describe("ERC20Distribution UGAIN", doExecuteTest(cSettingsUGAIN));
 
-describe("ERC20Distribution WGAIN", doExecuteTest(cSettingsWGAIN));
+// describe("ERC20Distribution WGAIN", doExecuteTest(cSettingsWGAIN));
