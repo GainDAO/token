@@ -14,8 +14,6 @@ const {
   setupDistributionNative,
   waitForTxToComplete,
   // displayStatus,
-  calculateRateUndivided,
-  userBuysGainTokensNative,
   createProof,
 } = require("./Library.js");
 
@@ -158,10 +156,10 @@ const doExecuteTest = (theSettings) => () => {
         validto
       );
 
-      const initialAmount = ethers.utils.parseEther("1000000");
+      const initialAmount = ethers.utils.parseEther("250000");
       let purchaseRate = await distribution.currentRateUndivided(initialAmount);
       const divider = await distribution.dividerrate_distribution();
-      let valuepaymenttoken = initialAmount.mul(purchaseRate).div(divider);
+      let valuepaymenttoken = initialAmount.mul(divider).div(purchaseRate);
 
       const tx1 = await distribution
         .connect(deployer)
@@ -210,9 +208,9 @@ const doExecuteTest = (theSettings) => () => {
         .div("100");
 
       const divider = await distribution.dividerrate_distribution();
-      let valuepaymenttoken1 = amountgainwei1.mul(purchaseRate1).div(divider);
-      let valuepaymenttoken2 = amountgainwei2.mul(purchaseRate2).div(divider);
-      let valuepaymenttoken3 = amountgainwei3.mul(purchaseRate3).div(divider);
+      let valuepaymenttoken1 = amountgainwei1.mul(divider).div(purchaseRate1);
+      let valuepaymenttoken2 = amountgainwei2.mul(divider).div(purchaseRate2);
+      let valuepaymenttoken3 = amountgainwei3.mul(divider).div(purchaseRate3);
 
       // send transactions
       await expect(
@@ -277,7 +275,7 @@ const doExecuteTest = (theSettings) => () => {
       );
 
       // each user wants to buy at current rate + 10% slippage
-      slippage = "110"; // ratio -> 100 = 0 % slippage, 110 = 10% slippage
+      slippage = "90"; // ratio -> 100 = 0 % slippage, 90 = 10% slippage
 
       purchaseRate1 = (await distribution.currentRateUndivided(amountgainwei1))
         .mul(slippage)
@@ -289,9 +287,9 @@ const doExecuteTest = (theSettings) => () => {
         .mul(slippage)
         .div("100");
 
-      valuepaymenttoken1 = amountgainwei1.mul(purchaseRate1).div(divider);
-      valuepaymenttoken2 = amountgainwei2.mul(purchaseRate2).div(divider);
-      valuepaymenttoken3 = amountgainwei3.mul(purchaseRate3).div(divider);
+      valuepaymenttoken1 = amountgainwei1.mul(divider).div(purchaseRate1);
+      valuepaymenttoken2 = amountgainwei2.mul(divider).div(purchaseRate2);
+      valuepaymenttoken3 = amountgainwei3.mul(divider).div(purchaseRate3);
 
       // send transactions
       await expect(

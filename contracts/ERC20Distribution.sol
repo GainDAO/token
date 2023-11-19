@@ -30,8 +30,8 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
 
     address public _kyc_approver; // address that signs the KYC approval
 
-    uint256 private immutable _startrate_distribution; // stored internally in high res
-    uint256 private immutable _endrate_distribution;   // stored internally in high res
+    uint256 private immutable _startrate_distribution; // specified in paymenttokens / gain token 
+    uint256 private immutable _endrate_distribution;   // specified in paymenttokens / gain token 
     uint256 private immutable _divider_rate;   // scaling factor for start and end rate
     
     uint256 private immutable _total_distribution_balance;  // total volume of initial distribution
@@ -67,7 +67,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         );
 
         require(
-            distStartRate < distEndRate,
+            distStartRate <= distEndRate,
             "TokenDistribution: start rate should be smaller than end rate"
         );
         
@@ -231,10 +231,10 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
             // Distribution active: ascending fractional linear rate (distribution slope)
             uint256 rateDelta =  
               _endrate_distribution.sub(_startrate_distribution);
-            uint256 offset_e18 = _current_distributed_balance.add(amountWei.div(2));
+            // uint256 offset_e18 = _current_distributed_balance.add(amountWei.div(2));
 
             uint256 currentRate = rateDelta
-              .mul(offset_e18)
+              .mul(_current_distributed_balance)
               .div(_total_distribution_balance)
               .add(_startrate_distribution);
             return currentRate;

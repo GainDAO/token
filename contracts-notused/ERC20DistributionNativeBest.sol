@@ -8,12 +8,12 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 
 /**
- * @title ERC20DistributionNative
+ * @title ERC20DistributionNativeBest
  * @dev A token distribution contract that sells an initial supply of tokens at a
    linearly decreasing exchange rate. After depletion of the initial supply, tokens
    can be recycled and resold at the end rate
  */
-contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
+contract ERC20DistributionNativeBest is Pausable, AccessControlEnumerable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
@@ -49,8 +49,8 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
     constructor(
         IERC20 distToken,
         address payable distBeneficiary,
-        uint256 distStartRate,   // gain / eth
-        uint256 distEndRate,     // gain / eth
+        uint256 distStartRate,
+        uint256 distEndRate,
         uint256 dividerRate,
         uint256 distVolumeTokens
     ) {
@@ -61,13 +61,13 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
         
         require(
             distStartRate > 0 && distEndRate > 0,
-            "TokenDistribution: rates should be > 0"
+            "TokenDistribution: rates should > 0"
         );
 
         require(
-            distStartRate >= distEndRate,
-            "TokenDistribution: start rate should be larger than or equal to end rate"
-          );
+            distStartRate < distEndRate,
+            "TokenDistribution: start rate should be smaller than end rate"
+        );
         
         require(
           dividerRate > 0,
@@ -198,16 +198,16 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
             "Currentrate: out of range"
         );
         
-            // Distribution active: ascending fractional linear rate (distribution slope)
-            uint256 rateDelta =  
-              _startrate_distribution.sub(_endrate_distribution);
-            uint256 offset_e18 = _total_distribution_balance.sub(_current_distributed_balance); //.add(amountWei.div(2));
+        // Distribution active: ascending fractional linear rate (distribution slope)
+        uint256 rateDelta =  
+          _endrate_distribution.sub(_startrate_distribution);
+        uint256 offset_e18 = _current_distributed_balance;
 
-            uint256 currentRate = rateDelta
-              .mul(offset_e18)
-              .div(_total_distribution_balance)
-              .add(_endrate_distribution);
-            return currentRate;
+        uint256 currentRate = rateDelta
+          .mul(offset_e18)
+          .div(_total_distribution_balance)
+          .add(_startrate_distribution);
+        return currentRate;
     }
     
     /**
@@ -249,10 +249,10 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
       }
 
       uint256 actualrate = currentRateUndivided(trustedtoken_amount);
-      require(purchaserate<=actualrate, "actual rate has worsened");
-      require(purchaserate>=actualrate.mul(90).div(100), "Max. 10% slippage allowed"); 
+      require(actualrate<=purchaserate, "actual rate has worsened");
+      require(purchaserate<=actualrate.mul(110).div(100), "Max. 10% slippage allowed"); 
       
-      uint256 fiattoken_amount = trustedtoken_amount.mul(_divider_rate).div(purchaserate);
+      uint256 fiattoken_amount = trustedtoken_amount.mul(purchaserate).div(_divider_rate);
 
       uint256 pool_balance = _trusted_token.balanceOf(address(this));
       require(trustedtoken_amount<=pool_balance); // insufficient tokens available in the distribution pool

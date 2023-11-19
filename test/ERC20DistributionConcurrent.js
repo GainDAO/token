@@ -7,7 +7,6 @@ const {
   ADDRESS_KYCPROVIDER2,
   cMaxTestDuration,
   cSettingsUGAIN,
-  cSettingsWGAIN,
 } = require("./Settings.js");
 
 const {
@@ -16,8 +15,6 @@ const {
   setupERC20Distribution,
   waitForTxToComplete,
   // displayStatus,
-  calculateRateUndivided,
-  userBuysGainTokens,
   createProof,
 } = require("./Library.js");
 

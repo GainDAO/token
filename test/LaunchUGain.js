@@ -8,7 +8,6 @@ const {
   ADDRESS_KYCPROVIDER2,
   cMaxTestDuration,
   cSettingsUGAIN,
-  cSettingsWGAIN,
 } = require("./Settings.js");
 
 const {
@@ -81,9 +80,5 @@ describe("Launch UGAIN", () => {
 
   it("launches UGAIN", async () => {
     await setupContracts(cSettingsUGAIN);
-  }).timeout(cMaxTestDuration);
-
-  it("launches WGAIN", async () => {
-    await setupContracts(cSettingsWGAIN);
   }).timeout(cMaxTestDuration);
 });

@@ -27,6 +27,8 @@
     "hardhat": "^2.12.6"
   },
   "dependencies": {
+    "chartjs-node-canvas": "^4.1.6",
+    "csv-stringify": "^6.4.0",
     "dotenv": "^10.0.0",
     "md5": "^2.3.0"
   }

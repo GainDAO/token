@@ -7,7 +7,6 @@ const {
   // ADDRESS_KYCPROVIDER2,
   // cMaxTestDuration,
   cSettingsUGAIN,
-  cSettingsWGAIN
 } = require('./Settings.js');
 
 const {
@@ -69,16 +68,12 @@ const executesRatiosTest = (theSettings) => () => {
     }
 
     await gaintoken.grantRole(await gaintoken.DEFAULT_ADMIN_ROLE(), treasury.address);
-    await gaintoken.grantRole(await gaintoken.PAUSER_ROLE(), treasury.address);
     await gaintoken.grantRole(await gaintoken.MINTER_ROLE(), treasury.address);
-    await gaintoken.grantRole(await gaintoken.BURNER_ROLE(), treasury.address);
 
     await distribution.grantRole(await distribution.DEFAULT_ADMIN_ROLE(), treasury.address);
     await distribution.grantRole(await distribution.KYCMANAGER_ROLE(), treasury.address);
 
-    // await gaintoken.connect(treasury).revokeRole(gaintoken.PAUSER_ROLE(), deployer.address);
     // await gaintoken.connect(treasury).revokeRole(gaintoken.MINTER_ROLE(), deployer.address);
-    // await gaintoken.connect(treasury).revokeRole(gaintoken.BURNER_ROLE(), deployer.address);
     // await gaintoken.connect(treasury).revokeRole(gaintoken.DEFAULT_ADMIN_ROLE(), deployer.address);
     //
     // await distribution.connect(treasury).revokeRole(distribution.KYCMANAGER_ROLE(), deployer.address);
@@ -190,5 +185,3 @@ const executesRatiosTest = (theSettings) => () => {
 }
 
 describe("ERC20DistributionRatio - UGAIN", executesRatiosTest(cSettingsUGAIN));
-
-describe("ERC20DistributionRatio - WGAIN", executesRatiosTest(cSettingsWGAIN));

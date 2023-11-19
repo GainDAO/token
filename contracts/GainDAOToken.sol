@@ -2,39 +2,17 @@
 pragma solidity =0.8.2;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Capped.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 
-contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+contract GainDAOToken is AccessControlEnumerable, ERC20Capped {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
     constructor(string memory name_, string memory symbol_, uint256 cap_)
         ERC20(name_, symbol_)
         ERC20Capped(cap_)
     {
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _setupRole(PAUSER_ROLE, _msgSender());
         _setupRole(MINTER_ROLE, _msgSender());
-        _setupRole(BURNER_ROLE, _msgSender());
-
-        // when the token is deployed, it starts as paused
-        _pause();
-    }
-
-    // We explicitely do not support pausing the token.
-    // function pause() public {
-    //     require(hasRole(PAUSER_ROLE, _msgSender()));
-    //     _pause();
-    // }
-
-    function unpause() public {
-        require(
-            hasRole(PAUSER_ROLE, _msgSender()),
-            "GainDAOToken: _msgSender() does not have the pauser role"
-        );
-        _unpause();
     }
 
     function mint(address to, uint256 amount) public {
@@ -47,11 +25,6 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
     }
 
     function burn(uint256 amount) public {
-        require(
-            hasRole(BURNER_ROLE, _msgSender()),
-            "GainDAOToken: _msgSender() does not have the burner role"
-        );
-
         _burn(_msgSender(), amount);
     }
 
@@ -60,12 +33,6 @@ contract GainDAOToken is Pausable, AccessControlEnumerable, ERC20Capped {
         address to,
         uint256 amount
     ) internal override {
-        // mint: always allowed
-        // other transfers: require not paused
-        if (from != address(0)) {
-          require(!paused(), "GainDAOToken: paused");
-        }
-
         super._beforeTokenTransfer(from, to, amount);
     }
 }

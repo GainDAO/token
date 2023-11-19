@@ -7,7 +7,6 @@ const {
   ADDRESS_KYCPROVIDER2,
   cMaxTestDuration,
   cSettingsUGAIN,
-  cSettingsWGAIN,
 } = require("./Settings.js");
 
 const {
@@ -404,20 +403,20 @@ const doExecuteTest = (theSettings) => () => {
         "distribution start rate cannot be zero or less"
       ).to.be.reverted;
 
-      let distribution2 = ERC20Distribution.connect(deployer).deploy(
-        paymenttoken.address,
-        gaintoken.address,
-        pool.address,
-        theSettings.cDistStartRate,
-        theSettings.cDistStartRate,
-        theSettings.cDistDividerRate,
-        theSettings.cDistVolumeWei
-      );
+      // let distribution2 = ERC20Distribution.connect(deployer).deploy(
+      //   paymenttoken.address,
+      //   gaintoken.address,
+      //   pool.address,
+      //   theSettings.cDistStartRate,
+      //   theSettings.cDistStartRate,
+      //   theSettings.cDistDividerRate,
+      //   theSettings.cDistVolumeWei
+      // );
 
-      await expect(
-        distribution2,
-        "distribution start rate cannot be equal to end rate"
-      ).to.be.reverted;
+      // await expect(
+      //   distribution2,
+      //   "distribution start rate cannot be equal to end rate"
+      // ).to.be.reverted;
 
       let distribution3 = ERC20Distribution.connect(deployer).deploy(
         paymenttoken.address,
@@ -430,7 +429,7 @@ const doExecuteTest = (theSettings) => () => {
       );
 
       await expect(
-        distribution2,
+        distribution3,
         "distribution start rate cannot be less than end rate"
       ).to.be.reverted;
     });
@@ -540,12 +539,22 @@ const doExecuteTest = (theSettings) => () => {
         "Cannot get rate for more than full distribution at once"
       ).to.be.reverted;
 
-      const buyratecalculated = theSettings.cDistStartRate.add(
-        theSettings.cDistEndRate.sub(theSettings.cDistStartRate).div(two)
-      );
+      const buyratecalculated = theSettings.cDistStartRate;
       const buyrateundivided = await distribution.currentRateUndivided(
         ntokenstobuy
-      ); // Gain / SimUSD
+      );
+      expect(
+        buyrateundivided,
+        "purchase rate must be correct for full distribution"
+      ).to.equal(buyratecalculated);
+
+
+      // const buyratecalculated = theSettings.cDistStartRate.add(
+      //   theSettings.cDistEndRate.sub(theSettings.cDistStartRate).div(two)
+      // );
+      // const buyrateundivided = await distribution.currentRateUndivided(
+      //   ntokenstobuy
+      // ); // Gain / SimUSD
       expect(
         buyrateundivided,
         "purchase rate must be correct for full distribution"
@@ -846,14 +855,8 @@ const doExecuteTest = (theSettings) => () => {
         "treasury"
       ));
 
-    it(`grants PAUSER_ROLE to treasury (token)`, async () =>
-      testAssignRole(token, "PAUSER_ROLE", treasury.address, "treasury"));
-
     it(`grants MINTER_ROLE to treasury (token)`, async () =>
       testAssignRole(token, "MINTER_ROLE", treasury.address, "treasury"));
-
-    it(`grants BURNER_ROLE to treasury (token)`, async () =>
-      testAssignRole(token, "BURNER_ROLE", treasury.address, "treasury"));
 
     it(`grants DEFAULT_ADMIN_ROLE to treasury (distribution)`, async () =>
       testAssignRole(
@@ -911,14 +914,8 @@ const doExecuteTest = (theSettings) => () => {
       // .to.be.revertedWith("AccessControl: sender must be an admin to grant");
     });
 
-    it(`removes PAUSER_ROLE from deployer (token)`, async () =>
-      testRevokeRole(token, "PAUSER_ROLE", deployer.address, "deployer"));
-
     it(`removes MINTER_ROLE from deployer (token)`, async () =>
       testRevokeRole(token, "MINTER_ROLE", deployer.address, "deployer"));
-
-    it(`removes BURNER_ROLE from deployer (token)`, async () =>
-      testRevokeRole(token, "BURNER_ROLE", deployer.address, "deployer"));
 
     it(`removes DEFAULT_ADMIN_ROLE from deployer (distribution)`, async () =>
       testRevokeRole(
@@ -1171,12 +1168,6 @@ const doExecuteTest = (theSettings) => () => {
         futureblock
       );
 
-      // contract must be unpaused (ie distribution must be started) for the purchase to succeed
-      const tx = await gaintoken
-        .connect(deployer)
-        .mint(distribution.address, theSettings.cDistVolumeWei);
-      await waitForTxToComplete(tx);
-
       await distribution.connect(deployer).startDistribution();
 
       let allowed = distribution
@@ -1209,12 +1200,6 @@ const doExecuteTest = (theSettings) => () => {
         user1,
         expiredblock
       );
-
-      // contract must be unpaused (ie distribution must be started) for the purchase to succeed
-      const tx = await gaintoken
-        .connect(deployer)
-        .mint(distribution.address, theSettings.cDistVolumeWei);
-      await waitForTxToComplete(tx);
 
       await distribution.connect(deployer).startDistribution();
 
@@ -1404,6 +1389,75 @@ const doExecuteTest = (theSettings) => () => {
     });
   });
 
+  describe("ERC20Distribution - Correct Distribution Curve", () => {
+    beforeEach(async () => {
+      await setupContracts(theSettings, true);
+
+      const currentblock = await ethers.provider.getBlockNumber();
+      validto = currentblock + 1000;
+      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto);
+      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto);
+    });
+
+    const createStep = (distributed_amountgain_start, startrate_gainperusd, amountgain, costusd) => { return { distributed_amountgain_start, startrate_gainperusd, amountgain, costusd }; };
+    const schemaOld = [
+      createStep('0','1','5000000','5000000'),
+      createStep('5000000','3.9','5000000','19500000'),
+      createStep('10000000','6.8','5000000','34000000'),
+      createStep('15000000','9.7','5000000','48500000'),
+      createStep('20000000','12.6','5000000','63000000.'),
+      createStep('25000000','15.5','5000000','77500000'),
+      createStep('30000000','18.4','5000000','92000000'),
+      createStep('35000000','21.3','5000000','106500000.'),
+      createStep('40000000','24.2','5000000','121000000.'),
+      createStep('45000000','27.1','5000000','135500000'),
+      createStep('50000000','30','0','0'),
+    ]
+    const schema = [
+      createStep('0','1','2500000','2500000'),
+      createStep('2500000','1.9','2500000','4750000'),
+      createStep('5000000','2.8','2500000','7000000'),
+      createStep('7500000','3.7','2500000','9250000'),
+      createStep('10000000','4.6','2500000','11500000'),
+      createStep('12500000','5.5','2500000','13750000'),
+      createStep('15000000','6.4','2500000','16000000.'),
+      createStep('17500000','7.3','2500000','18250000'),
+      createStep('20000000','8.2','2500000','20500000'),
+      createStep('22500000','9.1','2500000','22750000'),
+      createStep('25000000','10','0','0'),
+    ]
+    
+    it("has the right rates at different points in the distribution", async ()=>{
+      const divider = ethers.BigNumber.from(theSettings.cDistDividerRate);
+      let fulldist = await distribution.total_distribution_balance()
+      for(step of schema) {
+        const amountgainwei = ethers.utils.parseEther(step.amountgain);
+
+        const actualrate = await distribution.currentRateUndivided(amountgainwei);
+        const predictedrate = ethers.BigNumber.from(Math.round(step.startrate_gainperusd*divider,0));
+        expect(actualrate).to.equal(predictedrate);
+
+        const gainbalancebefore = await gaintoken.balanceOf(user1.address);
+        const balanceERC20before = await paymenttoken.balanceOf(user1.address);
+
+        await userBuysGainTokens(
+          paymenttoken,
+          distribution,
+          amountgainwei,
+          undefined,
+          user1,
+          user1kycproof,
+          validto,
+        );
+
+        const gainbalanceafter = await gaintoken.balanceOf(user1.address);
+        const balanceERC20after = await paymenttoken.balanceOf(user1.address);
+        expect(gainbalanceafter.sub(gainbalancebefore)).to.equal(amountgainwei);
+        expect(balanceERC20before.sub(balanceERC20after)).to.equal(ethers.utils.parseEther(step.costusd));
+      }
+    });
+  });
+
   describe("ERC20Distribution - Slippage", () => {
     let validto;
     let user1kycproof;
@@ -1437,7 +1491,7 @@ const doExecuteTest = (theSettings) => () => {
 
     it("calculates its own rate", () => {
       const singletest = (offset, amount) => {
-        const r = calculateRateUndivided(theSettings, offset, amount);
+        const r = calculateRateUndivided(theSettings, ethers.utils.parseEther(offset).toString());
         // console.log(`${offset}/${amount} - %s [%s/%s]`, r/theSettings.cDistDividerRate, r, theSettings.cDistDividerRate, );
       };
       singletest("500000", "0");
@@ -1472,8 +1526,7 @@ const doExecuteTest = (theSettings) => () => {
       );
       let predictednextrate = calculateRateUndivided(
         theSettings,
-        "150000",
-        nextamount
+        ethers.utils.parseEther("150000").toString()
       );
       expect(
         nextrateundivided,
@@ -1497,8 +1550,7 @@ const doExecuteTest = (theSettings) => () => {
       );
       predictednextrate = calculateRateUndivided(
         theSettings,
-        "151000",
-        nextamount
+        ethers.utils.parseEther("151000").toString(),
       );
       expect(nextrateundivided).to.equal(
         predictednextrate,
@@ -1541,8 +1593,7 @@ const doExecuteTest = (theSettings) => () => {
       );
       let predictednextrate = calculateRateUndivided(
         theSettings,
-        "150000",
-        nextamount
+        ethers.utils.parseEther("150000").toString(),
       );
       expect(
         nextrateundivided,
@@ -1584,7 +1635,7 @@ const doExecuteTest = (theSettings) => () => {
         nextamountwei
       );
       expect(nextrateundivided).to.equal(
-        calculateRateUndivided(theSettings, "150000", nextamount)
+        calculateRateUndivided(theSettings, ethers.utils.parseEther("150000"))
       );
 
       // someone buys tokens / changes rate before buy transaction is completed

@@ -6,3 +6,6 @@ cache
 artifacts
 coverage
 coverage.json
+
+# curve calculations
+curve-data
