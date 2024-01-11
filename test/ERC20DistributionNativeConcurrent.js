@@ -15,6 +15,7 @@ const {
   waitForTxToComplete,
   // displayStatus,
   createProof,
+  getChainId,
 } = require("./Library.js");
 
 const {
@@ -136,27 +137,30 @@ const doExecuteTest = (theSettings) => () => {
     );
   };
 
-  describe("ERC20Distribution - Competing transactions / Changing distribution rate", () => {
+  describe("ERC20DistributionNativeConcurrent - Competing transactions / Changing distribution rate", () => {
     let validto, user1kycproof, user2kycproof, user3kycproof;
 
     before(async () => {
+      const chainid = await getChainId();
       // Enable automining
       network.provider.send("evm_setAutomine", [true]);
 
       await setupContracts(theSettings, true);
       currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 100000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto);
-      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto);
-      user3kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user3, validto);
+      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
+      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto, chainid, distribution.address);
+      user3kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user3, validto, chainid, distribution.address);
 
       const deployerProof = await createProof(
         MNEMONIC_KYCPROVIDER1,
         deployer,
-        validto
+        validto,
+        chainid, 
+        distribution.address
       );
 
-      const initialAmount = ethers.utils.parseEther("250000");
+      const initialAmount = ethers.utils.parseEther("250"); // "250000"
       let purchaseRate = await distribution.currentRateUndivided(initialAmount);
       const divider = await distribution.dividerrate_distribution();
       let valuepaymenttoken = initialAmount.mul(divider).div(purchaseRate);
@@ -351,4 +355,4 @@ const doExecuteTest = (theSettings) => () => {
   });
 };
 
-describe("ERC20DistributionNative", doExecuteTest(cSettingsETH));
+describe("ERC20DistributionNativeConcurrent", doExecuteTest(cSettingsETH));

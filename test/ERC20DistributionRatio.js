@@ -16,7 +16,8 @@ const {
   waitForTxToComplete,
   // displayStatus,
   userBuysGainTokens,
-  createProof
+  createProof,
+  getChainId
 } = require('./Library.js');
 
 // const {
@@ -95,10 +96,11 @@ const executesRatiosTest = (theSettings) => () => {
   beforeEach(async () => {
     await setupContracts(theSettings);
 
+    const chainid = await getChainId();
     const currentblock = await ethers.provider.getBlockNumber()
     validto = currentblock + 1000;
-    user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto);
-    user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto);
+    user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
+    user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto, chainid, distribution.address);
   })
 
   const distVolume = ethers.utils.formatEther(theSettings.cDistVolumeWei)

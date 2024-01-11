@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity =0.8.2;
+pragma solidity =0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
@@ -19,6 +19,21 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     using ECDSA for bytes32;
     
     bytes32 public constant KYCMANAGER_ROLE = keccak256("KYCMANAGER_ROLE");
+
+    error InvalidBeneficiary();
+    error InvalidRate();
+    error InvalidDividerRate();
+    error Unauthorized();
+    error KYCNotSet();
+    error InvalidKYCToken();
+    error KYCTokenExpired();
+    error DistributionOutOfRange();
+    error PurchaseNotAllowed();
+    error CurrentRateExceedsLimit();
+    error CurrentRateExceedsLimitSlippage();
+    error InsufficientTokenApproval();
+    error FiatTransferFailed();
+    error TokenTransferFailed();
  
     event TokensSold(address recipient, uint256 amountFiat, uint256 amountToken, uint256 actualRate);
     event kycApproverChanged(address newKYCApprover);
@@ -56,28 +71,16 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         uint256 dividerRate,
         uint256 distVolumeTokens
     ) {
-        require(
-            distBeneficiary != address(0),
-            "TokenDistribution: distBeneficiary is the zero address"
-        );
+        if(distBeneficiary == address(0)) revert InvalidBeneficiary();
         
-        require(
-            distStartRate > 0 && distEndRate > 0,
-            "TokenDistribution: rates should > 0"
-        );
+        if(distStartRate == 0 || distEndRate == 0) revert InvalidRate();
 
-        require(
-            distStartRate <= distEndRate,
-            "TokenDistribution: start rate should be smaller than end rate"
-        );
+        if(distStartRate > distEndRate) revert InvalidRate();
+               
+        if(dividerRate == 0) revert InvalidDividerRate();
         
-        require(
-          dividerRate > 0,
-          "TokenDistribution: rate divider must be larger than zero"
-        );
-        
-        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _setupRole(KYCMANAGER_ROLE, _msgSender());
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setupRole(KYCMANAGER_ROLE, msg.sender);
 
         _fiat_token = fiatToken;
         _trusted_token = distToken;
@@ -161,6 +164,8 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         * @dev Function that starts distribution.
         */
     function startDistribution() whenPaused external {
+      if(hasRole(DEFAULT_ADMIN_ROLE, msg.sender)==false) revert Unauthorized();
+
       _unpause();
     }
     
@@ -175,37 +180,28 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         * @dev KYC signature check
         */
     function purchaseAllowed(bytes calldata proof, address from, uint256 validto) whenNotPaused public view virtual returns (bool) {
-      require(_kyc_approver != address(0),
-        "No KYC approver set: unable to validate buyer"
-      );
+      if(_kyc_approver == address(0)) revert KYCNotSet();
       
       bytes32 expectedHash =
         hashForKYC(from, validto)
           .toEthSignedMessageHash();
           
-      require(expectedHash.recover(proof) == _kyc_approver,
-        "KYC: invalid token"
-      );
-      
-      require(validto > block.number,
-        "KYC: token expired"
-      );
+      if(validto <= block.number) revert KYCTokenExpired();
+
+      if(expectedHash.recover(proof) != _kyc_approver) revert InvalidKYCToken();
       
       return true;
     }
     
-    function hashForKYC(address sender, uint256 validTo) public pure returns (bytes32) {
-        return keccak256(abi.encode(sender, validTo));
+    function hashForKYC(address sender, uint256 validTo) public view returns (bytes32) {
+        return keccak256(abi.encode(sender, validTo, block.chainid, address(this)));
     }
     
     /**
         * @dev Function that sets a new KYC Approver address
         */
     function changeKYCApprover(address newKYCApprover) external {
-      require(
-          hasRole(KYCMANAGER_ROLE, _msgSender()),
-          "KYC: _msgSender() does not have the KYC manager role"
-      );
+      if(false == hasRole(KYCMANAGER_ROLE, msg.sender)) revert Unauthorized();
         
       _kyc_approver = newKYCApprover;
 
@@ -214,7 +210,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     
     // After distribution has started, the contract can no longer be paused
     // function pause() public {
-    //     require(hasRole(PAUSER_ROLE, _msgSender()));
+    //     require(hasRole(PAUSER_ROLE, msg.sender));
     //     _pause();
     // }
     
@@ -224,9 +220,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
         * amount of erc20 tokens to be bought
         */
     function currentRateUndivided(uint256 amountWei) public view returns (uint256) {
-        require(_current_distributed_balance + amountWei <= _total_distribution_balance,
-            "Currentrate: out of range"
-        );
+      if(_current_distributed_balance + amountWei > _total_distribution_balance) revert DistributionOutOfRange();
         
             // Distribution active: ascending fractional linear rate (distribution slope)
             uint256 rateDelta =  
@@ -245,28 +239,12 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
               the current ERC20 balance from the distribution contract
         */
     function claimFiatToken() external {
-      require(msg.sender==_beneficiary,
-          "Claim: only the beneficiary can claim fiat token funds from the distribution contract"
-      );
+      if(msg.sender != _beneficiary) revert Unauthorized();
       
       bool result = _fiat_token.transfer(_beneficiary, _fiat_token.balanceOf(address(this)));
-      require(result,
-        "Claim: transfer must succeed"
-      );
+      if(false == result ) revert FiatTransferFailed();
     }
     
-    /**
-        * @dev Function that allows the beneficiary to retrieve
-              the current Ether balance from the distribution contract
-        */
-    function claimNativeToken() external {
-      require(msg.sender==_beneficiary,
-          "Claim: only the beneficiary can claim native token funds from the distribution contract"
-      );
-      
-      _beneficiary.transfer(address(this).balance);
-    }
-
     /**
         * @dev Function that is used to purchase tokens at the given rate.
           Calculates total number of tokens that can be bought for the given Ether
@@ -283,44 +261,28 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       uint256 validTo) external {
       
       // anyone but contract admins must pass kyc
-      if(hasRole(DEFAULT_ADMIN_ROLE, _msgSender())==false) {
-        require(
-          purchaseAllowed(proof, msg.sender, validTo),
-          "Buyer did not pass KYC procedure"
-        );
+      if(hasRole(DEFAULT_ADMIN_ROLE, msg.sender)==false) {
+        if(false==purchaseAllowed(proof, msg.sender, validTo)) revert PurchaseNotAllowed();
       }
 
       uint256 actualrate = currentRateUndivided(trustedtoken_amount);
-      require(actualrate<=limitrate, "Current rate exceeds limit rate"); 
-      require(limitrate<=actualrate.mul(110).div(100), "Max. 10% slippage allowed"); 
+      if(actualrate>limitrate) revert CurrentRateExceedsLimit();
+      if(limitrate>actualrate.mul(110).div(100)) revert CurrentRateExceedsLimitSlippage();
       
       uint256 fiattoken_amount = trustedtoken_amount.mul(actualrate).div(_divider_rate);
 
-      require(
-        fiattoken_amount <= fiattoken_allowance(), 
-        "unable to sell: insufficient tokens approved"
-      );
+      if(fiattoken_amount > fiattoken_allowance()) revert InsufficientTokenApproval();
       
       uint256 pool_balance = _trusted_token.balanceOf(address(this));
       require(trustedtoken_amount<=pool_balance); // insufficient tokens available in the distribution pool
       
       _current_distributed_balance = _current_distributed_balance.add(trustedtoken_amount);
 
-      uint256 initfiatbalance = _fiat_token.balanceOf(address(this));
       bool result1 = _fiat_token.transferFrom(msg.sender, address(this), fiattoken_amount);
-      require(
-        result1 && 
-          _fiat_token.balanceOf(address(this)) - initfiatbalance == fiattoken_amount,
-        "PurchaseTokens: fiat transfer must succeed"
-      );
+      if(false==result1) revert FiatTransferFailed();
 
-      uint256 inittokenbalance = _trusted_token.balanceOf(address(this));
       bool result2 = _trusted_token.transfer(msg.sender, trustedtoken_amount);
-      require(
-        result2 && 
-          inittokenbalance - _trusted_token.balanceOf(address(this))==trustedtoken_amount,
-        "PurchaseTokens: token transfer must succeed"
-      );
+      if(false==result2) revert TokenTransferFailed();
 
       emit TokensSold(msg.sender, fiattoken_amount, trustedtoken_amount, actualrate);
     }

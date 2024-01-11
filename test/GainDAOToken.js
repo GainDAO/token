@@ -121,9 +121,12 @@ describe("GainDAOToken - operation", async () => {
 
     it("non minter cannot mint tokens", async () => {
       let allowed = token.connect(user).mint(user.address, 100);
-      await expect(allowed, "non minter cannot mint tokens").to.be.revertedWith(
-        "GainDAOToken: _msgSender() does not have the minter role"
-      );
+      await expect(
+        allowed, 
+        "non minter cannot mint tokens")
+        .to.be.revertedWithCustomError(
+          token,
+          "Unauthorized");
     });
 
     it("cannot mint more tokens than the cap", async () => {

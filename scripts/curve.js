@@ -21,6 +21,7 @@
 //   calculateRateUndividedNew,  
 //   calculateRateUndividedNativeNew,
 //   createProof,
+//   getChainId,
 //   waitForTxToComplete,
 // } = require("../test/Library.js");
 // const {
@@ -403,7 +404,7 @@
 
 //   const currentblock = await ethers.provider.getBlockNumber();
 //   let validto = currentblock + 1000;  
-//   let user1_kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto);
+//   let user1_kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, await getChainId(), distribution.address);
 //   // let dummyproof =
 //   // "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 //   const dividerrate_distribution = await distribution.dividerrate_distribution();

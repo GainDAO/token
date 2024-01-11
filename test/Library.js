@@ -380,16 +380,21 @@ const userBuysGainTokensNative = async (
   }
 };
 
-const createProof = async (mnemonic, usertowhitelist, validto) => {
+const createProof = async (mnemonic, usertowhitelist, validto, chainid, contractaddress ) => {
   const kycwallet = ethers.Wallet.fromMnemonic(mnemonic);
   const coder = new ethers.utils.AbiCoder();
   const datahex = coder.encode(
-    ["address", "uint256"],
-    [usertowhitelist.address, validto]
+    ["address", "uint256", "uint256", "address"],
+    [usertowhitelist.address, validto, chainid, contractaddress]
   );
   const hash = ethers.utils.keccak256(datahex);
 
   return kycwallet.signMessage(ethers.utils.arrayify(hash));
+};
+
+const getChainId = async () => {
+  const network = await ethers.provider.getNetwork();
+  return network.chainId;
 };
 
 module.exports = {
@@ -408,4 +413,5 @@ module.exports = {
   userBuysGainTokens,
   userBuysGainTokensNative,
   createProof,
+  getChainId,
 };
