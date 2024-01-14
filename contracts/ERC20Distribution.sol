@@ -33,7 +33,6 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     error CurrentRateExceedsLimitSlippage();
     error InsufficientTokenApproval();
     error FiatTransferFailed();
-    error TokenTransferFailed();
  
     event TokensSold(address recipient, uint256 amountFiat, uint256 amountToken, uint256 actualRate);
     event kycApproverChanged(address newKYCApprover);
@@ -222,7 +221,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     function currentRateUndivided(uint256 amountWei) public view returns (uint256) {
       if(_current_distributed_balance + amountWei > _total_distribution_balance) revert DistributionOutOfRange();
         
-            // Distribution active: ascending fractional linear rate (distribution slope)
+            // Distribution active: ascending or flat fractional linear rate (distribution slope)
             uint256 rateDelta =  
               _endrate_distribution.sub(_startrate_distribution);
             // uint256 offset_e18 = _current_distributed_balance.add(amountWei.div(2));
@@ -241,8 +240,7 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
     function claimFiatToken() external {
       if(msg.sender != _beneficiary) revert Unauthorized();
       
-      bool result = _fiat_token.transfer(_beneficiary, _fiat_token.balanceOf(address(this)));
-      if(false == result ) revert FiatTransferFailed();
+      _fiat_token.safeTransfer(_beneficiary, _fiat_token.balanceOf(address(this)));
     }
     
     /**
@@ -278,11 +276,9 @@ contract ERC20Distribution is Pausable, AccessControlEnumerable {
       
       _current_distributed_balance = _current_distributed_balance.add(trustedtoken_amount);
 
-      bool result1 = _fiat_token.transferFrom(msg.sender, address(this), fiattoken_amount);
-      if(false==result1) revert FiatTransferFailed();
+      _fiat_token.safeTransferFrom(msg.sender, address(this), fiattoken_amount);
 
-      bool result2 = _trusted_token.transfer(msg.sender, trustedtoken_amount);
-      if(false==result2) revert TokenTransferFailed();
+      _trusted_token.safeTransfer(msg.sender, trustedtoken_amount);
 
       emit TokensSold(msg.sender, fiattoken_amount, trustedtoken_amount, actualrate);
     }

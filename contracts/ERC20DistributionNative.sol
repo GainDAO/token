@@ -33,7 +33,6 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
     error CurrentRateExceedsLimitSlippage();
     error InsufficientTokensAvailable();
     error FiatTransferFailed();
-    error TokenTransferFailed();
 
     event TokensSold(address recipient, uint256 amountEth, uint256 amountToken, uint256 actualRate);
     event kycApproverChanged(address newKYCApprover);
@@ -192,7 +191,7 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
     function currentRateUndivided(uint256 amountWei) public view returns (uint256) {
             if(_current_distributed_balance + amountWei > _total_distribution_balance) revert DistributionOutOfRange();
         
-            // Distribution active: ascending fractional linear rate (distribution slope)
+            // Distribution active: descending or flat fractional linear rate (distribution slope)
             uint256 rateDelta =  
               _startrate_distribution.sub(_endrate_distribution);
             uint256 offset_e18 = _total_distribution_balance.sub(_current_distributed_balance); //.add(amountWei.div(2));
@@ -247,8 +246,7 @@ contract ERC20DistributionNative is Pausable, AccessControlEnumerable {
  
       if(msg.value != fiattoken_amount) revert FiatTransferFailed();
 
-      bool result2 = _trusted_token.transfer(msg.sender, trustedtoken_amount);
-      if(false == result2) revert TokenTransferFailed();
+      _trusted_token.safeTransfer(msg.sender, trustedtoken_amount);
 
       emit TokensSold(msg.sender, msg.value, trustedtoken_amount, purchaserate);
     }
