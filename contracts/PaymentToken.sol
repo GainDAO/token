@@ -9,14 +9,16 @@ import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol"
  */
 contract PaymentToken is ERC20PresetMinterPauser {
     address _rejectedAddress;
+    uint8 _decimals;
 
-    constructor(uint256 initialSupply, string memory name_, string memory symbol,  address reject ) ERC20PresetMinterPauser(name_, symbol) {
+    constructor(uint256 initialSupply, string memory name_, string memory symbol,  address reject, uint8 decimals_ ) ERC20PresetMinterPauser(name_, symbol) {
         _rejectedAddress = reject;
         _mint(msg.sender, initialSupply);
+        _decimals = decimals_;
     }
 
    function decimals() public view virtual override returns (uint8) {
-     return 18;  // eg. return 12;
+     return _decimals;  
    }
    
    function transfer(address to, uint256 amount) override public returns (bool) {

@@ -55,7 +55,8 @@ const doExecuteTest = (theSettings) => () => {
         deployer,
         theSettings.gainTokenname,
         theSettings.gainTokensymbol,
-        theSettings.cDistVolumeWei
+        theSettings.cDistVolumeWei,
+        theSettings.gainTokenDecimals
       );
       distribution = await setupDistributionNative(
         deployer,
@@ -148,15 +149,33 @@ const doExecuteTest = (theSettings) => () => {
       await setupContracts(theSettings, true);
       currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 100000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
-      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto, chainid, distribution.address);
-      user3kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user3, validto, chainid, distribution.address);
+      user1kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user1,
+        validto,
+        chainid,
+        distribution.address
+      );
+      user2kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user2,
+        validto,
+        chainid,
+        distribution.address
+      );
+      user3kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user3,
+        validto,
+        chainid,
+        distribution.address
+      );
 
       const deployerProof = await createProof(
         MNEMONIC_KYCPROVIDER1,
         deployer,
         validto,
-        chainid, 
+        chainid,
         distribution.address
       );
 

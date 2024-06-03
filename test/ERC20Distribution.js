@@ -18,7 +18,7 @@ const {
   calculateRateUndivided,
   userBuysGainTokens,
   createProof,
-  getChainId
+  getChainId,
 } = require("./Library.js");
 
 const {
@@ -35,6 +35,8 @@ const doExecuteTest = (theSettings) => () => {
   let chainid;
   let paymenttoken;
   let gaintoken;
+  let distribution;
+
   let deployer;
   let treasury;
   let pool;
@@ -66,13 +68,15 @@ const doExecuteTest = (theSettings) => () => {
         user3,
         rejecteduser,
         theSettings.paymentTokenVolume,
-        theSettings.paymentTokenName
+        theSettings.paymentTokenName,
+        theSettings.paymentTokenDecimals
       );
       gaintoken = await setupGainDAOToken(
         deployer,
         theSettings.gainTokenname,
         theSettings.gainTokensymbol,
-        theSettings.cDistVolumeWei
+        theSettings.cDistVolumeWei,
+        theSettings.gainTokenDecimals
       );
       distribution = await setupERC20Distribution(
         deployer,
@@ -317,14 +321,16 @@ const doExecuteTest = (theSettings) => () => {
         user3,
         rejecteduser,
         theSettings.paymentTokenVolume,
-        theSettings.paymentTokenName
+        theSettings.paymentTokenName,
+        theSettings.paymentTokenDecimals
       );
 
       gaintoken = await setupGainDAOToken(
         deployer,
         theSettings.gainTokenname,
         theSettings.gainTokensymbol,
-        theSettings.cDistVolumeWei
+        theSettings.cDistVolumeWei,
+        theSettings.gainTokenDecimals
       );
     });
 
@@ -343,8 +349,10 @@ const doExecuteTest = (theSettings) => () => {
         theSettings.cDistVolumeWei
       );
 
-      await expect(distribution1, "zero address cannot be used as beneficiary")
-        .to.be.revertedWithCustomError(ERC20Distribution, "InvalidBeneficiary");
+      await expect(
+        distribution1,
+        "zero address cannot be used as beneficiary"
+      ).to.be.revertedWithCustomError(ERC20Distribution, "InvalidBeneficiary");
     });
 
     it("distribution start rate cannot be zero or less", async () => {
@@ -450,8 +458,9 @@ const doExecuteTest = (theSettings) => () => {
       ).to.be.revertedWithCustomError(ERC20Distribution, "Unauthorized");
 
       // added to achieve 100% code coverage
-      expect(await paymenttoken.decimals()).to.be.equal(18);
-
+      expect(await paymenttoken.decimals()).to.be.equal(
+        theSettings.paymentTokenDecimals
+      );
     });
   });
 
@@ -473,7 +482,10 @@ const doExecuteTest = (theSettings) => () => {
 
       // normal user cannot start distribution
       const txstart1 = distribution.connect(user1).startDistribution();
-      expect(txstart1).to.be.revertedWithCustomError(distribution, "Unauthorized");
+      expect(txstart1).to.be.revertedWithCustomError(
+        distribution,
+        "Unauthorized"
+      );
 
       // admin user can start distribution
       const txstart2 = await distribution.connect(deployer).startDistribution();
@@ -490,7 +502,9 @@ const doExecuteTest = (theSettings) => () => {
 
     it("has expected exchange rate before distribution start", async () => {
       expect(
-        await distribution.currentRateUndivided(ethers.utils.parseEther("0")),
+        await distribution.currentRateUndivided(
+          ethers.utils.parseUnits("0", await paymenttoken.decimals())
+        ),
         "invalid exchange rate before distribution"
       ).to.equal(theSettings.cDistStartRate);
     });
@@ -526,7 +540,6 @@ const doExecuteTest = (theSettings) => () => {
         buyrateundivided,
         "purchase rate must be correct for full distribution"
       ).to.equal(buyratecalculated);
-
 
       // const buyratecalculated = theSettings.cDistStartRate.add(
       //   theSettings.cDistEndRate.sub(theSettings.cDistStartRate).div(two)
@@ -585,7 +598,7 @@ const doExecuteTest = (theSettings) => () => {
     it("cannot receive ether", async () => {
       const txsend = user1.sendTransaction({
         to: distribution.address,
-        value: ethers.utils.parseEther("0.1"),
+        value: ethers.utils.parseUnits("0.1", await paymenttoken.decimals()),
       });
       await expect(txsend, "contract should not accept ether").to.be.reverted;
     });
@@ -597,16 +610,19 @@ const doExecuteTest = (theSettings) => () => {
     });
 
     it("has funded the test accounts with USD", async () => {
+      const decimals = await paymenttoken.decimals();
+
       expect(await paymenttoken.balanceOf(user1.address)).to.equal(
-        ethers.utils.parseEther("42000000001"),
-        "user 1 funding failed"
+        ethers.utils.parseUnits("42000000001", decimals),
+        "user 1 funding failed: " +
+          ethers.utils.parseUnits("42000000001", decimals)
       );
       expect(await paymenttoken.balanceOf(user2.address)).to.equal(
-        ethers.utils.parseEther("42000000002"),
+        ethers.utils.parseUnits("42000000002", decimals),
         "user 2 funding failed"
       );
       expect(await paymenttoken.balanceOf(user3.address)).to.equal(
-        ethers.utils.parseEther("42000000003"),
+        ethers.utils.parseUnits("42000000003", decimals),
         "user 3 funding failed"
       );
     });
@@ -626,7 +642,9 @@ const doExecuteTest = (theSettings) => () => {
           .mint(distribution.address, theSettings.cDistVolumeWei);
         await waitForTxToComplete(txmint);
 
-        const txstart = await distribution.connect(deployer).startDistribution();
+        const txstart = await distribution
+          .connect(deployer)
+          .startDistribution();
         await waitForTxToComplete(txstart);
 
         const txapprover = await distribution.changeKYCApprover(
@@ -660,7 +678,10 @@ const doExecuteTest = (theSettings) => () => {
     it("user 1 can purchase " + theSettings.gainTokenname, async () => {
       const amount_tokens_str = "1500000"; // buy 150000 ugain
 
-      const ntokenstobuy = ethers.utils.parseEther(amount_tokens_str);
+      const ntokenstobuy = ethers.utils.parseUnits(
+        amount_tokens_str,
+        await paymenttoken.decimals()
+      );
       const divider = await distribution.dividerrate_distribution();
       const buyrateundivided = await distribution.currentRateUndivided(
         ntokenstobuy
@@ -755,7 +776,10 @@ const doExecuteTest = (theSettings) => () => {
     it("rejected user cannot purchase uGAIN", async () => {
       const amount_tokens_str = "1500000"; // buy 150000 ugain
 
-      const ntokenstobuy = ethers.utils.parseEther(amount_tokens_str);
+      const ntokenstobuy = ethers.utils.parseUnits(
+        amount_tokens_str,
+        await paymenttoken.decimals()
+      );
       const divider = await distribution.dividerrate_distribution();
       const buyrateundivided = await distribution.currentRateUndivided(
         ntokenstobuy
@@ -911,28 +935,40 @@ const doExecuteTest = (theSettings) => () => {
     it("must calculate correct proof", async () => {
       let coder = new ethers.utils.AbiCoder();
 
-      let datahex1 = coder.encode(["address", "uint256", "uint256", "address"], [user1.address, 345, chainid, distribution.address]);
+      let datahex1 = coder.encode(
+        ["address", "uint256", "uint256", "address"],
+        [user1.address, 345, chainid, distribution.address]
+      );
       let hashcalculated1 = ethers.utils.keccak256(datahex1);
       let hashcontract1 = await distribution.hashForKYC(user1.address, 345);
       expect(hashcontract1, "calculates correct proof #1").to.equal(
         hashcalculated1
       );
 
-      let datahex2 = coder.encode(["address", "uint256", "uint256", "address"], [user2.address, 678, chainid, distribution.address]);
+      let datahex2 = coder.encode(
+        ["address", "uint256", "uint256", "address"],
+        [user2.address, 678, chainid, distribution.address]
+      );
       let hashcalculated2 = ethers.utils.keccak256(datahex2);
       let hashcontract2 = await distribution.hashForKYC(user2.address, 678);
       expect(hashcontract2, "calculates correct proof #2").to.equal(
         hashcalculated2
       );
 
-      let datahex3 = coder.encode(["address", "uint256", "uint256", "address"], [user2.address, 678, chainid+1, distribution.address]);
+      let datahex3 = coder.encode(
+        ["address", "uint256", "uint256", "address"],
+        [user2.address, 678, chainid + 1, distribution.address]
+      );
       let hashcalculated3 = ethers.utils.keccak256(datahex3);
       let hashcontract3 = await distribution.hashForKYC(user2.address, 678);
       expect(hashcontract3, "calculates incorrect proof #1").not.to.equal(
         hashcalculated3
       );
 
-      let datahex4 = coder.encode(["address", "uint256", "uint256", "address"], [user2.address, 678, chainid, token.address]);
+      let datahex4 = coder.encode(
+        ["address", "uint256", "uint256", "address"],
+        [user2.address, 678, chainid, token.address]
+      );
       let hashcalculated4 = ethers.utils.keccak256(datahex4);
       let hashcontract4 = await distribution.hashForKYC(user2.address, 678);
       expect(hashcontract4, "calculates incorrect proof #2").not.to.equal(
@@ -957,7 +993,10 @@ const doExecuteTest = (theSettings) => () => {
 
       // can buy with no kyc approver set
       let buyamount = "3007";
-      let buyamountwei = ethers.utils.parseEther(buyamount);
+      let buyamountwei = ethers.utils.parseUnits(
+        buyamount,
+        await paymenttoken.decimals()
+      );
       let currentrateundivided = await distribution.currentRateUndivided(
         buyamountwei
       );
@@ -978,9 +1017,15 @@ const doExecuteTest = (theSettings) => () => {
       expect(await distribution._kyc_approver()).to.equal(ADDRESS_KYCPROVIDER1);
 
       buyamount = "5999";
-      buyamountwei = ethers.utils.parseEther(buyamount);
+      buyamountwei = ethers.utils.parseUnits(
+        buyamount,
+        await paymenttoken.decimals()
+      );
       let totalamount = "9006"; // 3007 + 5999
-      let totalamountwei = ethers.utils.parseEther(totalamount);
+      let totalamountwei = ethers.utils.parseUnits(
+        totalamount,
+        await paymenttoken.decimals()
+      );
       currentrateundivided = await distribution.currentRateUndivided(
         buyamountwei
       );
@@ -1355,7 +1400,10 @@ const doExecuteTest = (theSettings) => () => {
 
     it("start distribution - it cannot purchase tokens while paused", async () => {
       let buyamount = "1";
-      let buyamountwei = ethers.utils.parseEther(buyamount);
+      let buyamountwei = ethers.utils.parseUnits(
+        buyamount,
+        await paymenttoken.decimals()
+      );
 
       const result = await userBuysGainTokens(
         paymenttoken,
@@ -1388,46 +1436,64 @@ const doExecuteTest = (theSettings) => () => {
 
       const currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 1000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
-      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto, chainid, distribution.address);
+      user1kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user1,
+        validto,
+        chainid,
+        distribution.address
+      );
+      user2kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user2,
+        validto,
+        chainid,
+        distribution.address
+      );
     });
 
-    const createStep = (distributed_amountgain_start, startrate_gainperusd, amountgain, costusd) => { return { distributed_amountgain_start, startrate_gainperusd, amountgain, costusd }; };
-    const schemaOld = [
-      createStep('0','1','5000000','5000000'),
-      createStep('5000000','3.9','5000000','19500000'),
-      createStep('10000000','6.8','5000000','34000000'),
-      createStep('15000000','9.7','5000000','48500000'),
-      createStep('20000000','12.6','5000000','63000000.'),
-      createStep('25000000','15.5','5000000','77500000'),
-      createStep('30000000','18.4','5000000','92000000'),
-      createStep('35000000','21.3','5000000','106500000.'),
-      createStep('40000000','24.2','5000000','121000000.'),
-      createStep('45000000','27.1','5000000','135500000'),
-      createStep('50000000','30','0','0'),
-    ]
+    const createStep = (
+      distributed_amountgain_start,
+      startrate_gainperusd,
+      amountgain,
+      costusd
+    ) => {
+      return {
+        distributed_amountgain_start,
+        startrate_gainperusd,
+        amountgain,
+        costusd,
+      };
+    };
     const schema = [
-      createStep('0','1','2500000','2500000'),
-      createStep('2500000','1.9','2500000','4750000'),
-      createStep('5000000','2.8','2500000','7000000'),
-      createStep('7500000','3.7','2500000','9250000'),
-      createStep('10000000','4.6','2500000','11500000'),
-      createStep('12500000','5.5','2500000','13750000'),
-      createStep('15000000','6.4','2500000','16000000.'),
-      createStep('17500000','7.3','2500000','18250000'),
-      createStep('20000000','8.2','2500000','20500000'),
-      createStep('22500000','9.1','2500000','22750000'),
-      createStep('25000000','10','0','0'),
-    ]
-    
-    it("has the right rates at different points in the distribution", async ()=>{
-      const divider = ethers.BigNumber.from(theSettings.cDistDividerRate);
-      let fulldist = await distribution.total_distribution_balance()
-      for(step of schema) {
-        const amountgainwei = ethers.utils.parseEther(step.amountgain);
+      createStep("0", "1", "6875000", "6875000"),
+      createStep("6875000", "2.9", "6875000", "19937500."),
+      createStep("13750000", "4.8", "6875000", "33000000."),
+      createStep("20625000", "6.7", "6875000", "46062500"),
+      createStep("27500000", "8.6", "6875000", "59125000."),
+      createStep("34375000", "10.5", "6875000", "72187500"),
+      createStep("41250000", "12.4", "6875000", "85250000"),
+      createStep("48125000", "14.3", "6875000", "98312500"),
+      createStep("55000000", "16.2", "6875000", "111375000."),
+      createStep("61875000", "18.1", "6875000", "124437500."),
+      createStep("68750000", "20", "0", "0"),
+    ];
 
-        const actualrate = await distribution.currentRateUndivided(amountgainwei);
-        const predictedrate = ethers.BigNumber.from(Math.round(step.startrate_gainperusd*divider,0));
+    it("has the right rates at different points in the distribution", async () => {
+      const divider = ethers.BigNumber.from(theSettings.cDistDividerRate);
+      let fulldist = await distribution.total_distribution_balance();
+      for (step of schema) {
+        const amountgainwei = ethers.utils.parseUnits(
+          step.amountgain,
+          await paymenttoken.decimals()
+        );
+
+        const actualrate = await distribution.currentRateUndivided(
+          amountgainwei
+        );
+        const predictedrate = ethers.BigNumber.from(
+          Math.round(step.startrate_gainperusd * divider, 0)
+        );
         expect(actualrate).to.equal(predictedrate);
 
         const gainbalancebefore = await gaintoken.balanceOf(user1.address);
@@ -1440,13 +1506,15 @@ const doExecuteTest = (theSettings) => () => {
           undefined,
           user1,
           user1kycproof,
-          validto,
+          validto
         );
 
         const gainbalanceafter = await gaintoken.balanceOf(user1.address);
         const balanceERC20after = await paymenttoken.balanceOf(user1.address);
         expect(gainbalanceafter.sub(gainbalancebefore)).to.equal(amountgainwei);
-        expect(balanceERC20before.sub(balanceERC20after)).to.equal(ethers.utils.parseEther(step.costusd));
+        expect(balanceERC20before.sub(balanceERC20after)).to.equal(
+          ethers.utils.parseUnits(step.costusd, await paymenttoken.decimals())
+        );
       }
     });
   });
@@ -1461,13 +1529,28 @@ const doExecuteTest = (theSettings) => () => {
 
       const currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 1000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
-      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto, chainid, distribution.address);
+      user1kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user1,
+        validto,
+        chainid,
+        distribution.address
+      );
+      user2kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user2,
+        validto,
+        chainid,
+        distribution.address
+      );
     });
 
     it("it is possible to buy at the current rate", async () => {
       let buyamount = "3002";
-      let buyamountwei = ethers.utils.parseEther(buyamount);
+      let buyamountwei = ethers.utils.parseUnits(
+        buyamount,
+        await paymenttoken.decimals()
+      );
 
       await userBuysGainTokens(
         paymenttoken,
@@ -1482,20 +1565,27 @@ const doExecuteTest = (theSettings) => () => {
       expect(balanceafter).to.equal(buyamountwei);
     });
 
-    it("calculates its own rate", () => {
-      const singletest = (offset, amount) => {
-        const r = calculateRateUndivided(theSettings, ethers.utils.parseEther(offset).toString());
+    it("calculates its own rate", async () => {
+      const singletest = async (offset, amount) => {
+        const r = calculateRateUndivided(
+          theSettings,
+          ethers.utils.parseUnits(offset).toString(),
+          await paymenttoken.decimals()
+        );
         // console.log(`${offset}/${amount} - %s [%s/%s]`, r/theSettings.cDistDividerRate, r, theSettings.cDistDividerRate, );
       };
-      singletest("500000", "0");
-      singletest("500000", "1000");
-      singletest("500000", "5000");
-      singletest("150000", "1000");
+      await singletest("500000", "0");
+      await singletest("500000", "1000");
+      await singletest("500000", "5000");
+      await singletest("150000", "1000");
     });
 
     it("it is possible to buy at a worse rate than current rate (<= 10% slippage)", async () => {
       // set dist offset to 150000
-      let startvolumewei = ethers.utils.parseEther("150000");
+      let startvolumewei = ethers.utils.parseUnits(
+        "150000",
+        await paymenttoken.decimals()
+      );
       await userBuysGainTokens(
         paymenttoken,
         distribution,
@@ -1509,17 +1599,24 @@ const doExecuteTest = (theSettings) => () => {
       expect(
         await gaintoken.balanceOf(user1.address),
         "Initial purchase must succeed"
-      ).to.equal(ethers.utils.parseEther("150000"));
+      ).to.equal(
+        ethers.utils.parseUnits("150000", await paymenttoken.decimals())
+      );
 
       // calculate actual rate
       let nextamount = "1000";
-      let nextamountwei = ethers.utils.parseEther(nextamount);
+      let nextamountwei = ethers.utils.parseUnits(
+        nextamount,
+        await paymenttoken.decimals()
+      );
       let nextrateundivided = await distribution.currentRateUndivided(
         nextamountwei
       );
       let predictednextrate = calculateRateUndivided(
         theSettings,
-        ethers.utils.parseEther("150000").toString()
+        ethers.utils
+          .parseUnits("150000", await paymenttoken.decimals())
+          .toString()
       );
       expect(
         nextrateundivided,
@@ -1543,7 +1640,9 @@ const doExecuteTest = (theSettings) => () => {
       );
       predictednextrate = calculateRateUndivided(
         theSettings,
-        ethers.utils.parseEther("151000").toString(),
+        ethers.utils
+          .parseUnits("151000", await paymenttoken.decimals())
+          .toString()
       );
       expect(nextrateundivided).to.equal(
         predictednextrate,
@@ -1559,7 +1658,10 @@ const doExecuteTest = (theSettings) => () => {
 
     it("it is not possible to buy at a worse rate then current rate with > 10% slippage", async () => {
       // set dist offset to 150000
-      let startvolumewei = ethers.utils.parseEther("150000");
+      let startvolumewei = ethers.utils.parseUnits(
+        "150000",
+        await paymenttoken.decimals()
+      );
       let currentrateundivided = await distribution.currentRateUndivided(
         startvolumewei
       );
@@ -1576,17 +1678,24 @@ const doExecuteTest = (theSettings) => () => {
       expect(
         await gaintoken.balanceOf(user1.address),
         "Initial purchase must succeed"
-      ).to.equal(ethers.utils.parseEther("150000"));
+      ).to.equal(
+        ethers.utils.parseUnits("150000", await paymenttoken.decimals())
+      );
 
       // calculate actual rate
       let nextamount = "1000";
-      let nextamountwei = ethers.utils.parseEther(nextamount);
+      let nextamountwei = ethers.utils.parseUnits(
+        nextamount,
+        await paymenttoken.decimals()
+      );
       let nextrateundivided = await distribution.currentRateUndivided(
         nextamountwei
       );
       let predictednextrate = calculateRateUndivided(
         theSettings,
-        ethers.utils.parseEther("150000").toString(),
+        ethers.utils
+          .parseUnits("150000", await paymenttoken.decimals())
+          .toString()
       );
       expect(
         nextrateundivided,
@@ -1609,7 +1718,10 @@ const doExecuteTest = (theSettings) => () => {
 
     it("it is not possible to buy when the rate has worsened", async () => {
       // set dist offset to 150000
-      let startvolumewei = ethers.utils.parseEther("150000");
+      let startvolumewei = ethers.utils.parseUnits(
+        "150000",
+        await paymenttoken.decimals()
+      );
 
       await userBuysGainTokens(
         paymenttoken,
@@ -1623,16 +1735,25 @@ const doExecuteTest = (theSettings) => () => {
 
       // calculate actual rate
       let nextamount = "1000";
-      let nextamountwei = ethers.utils.parseEther(nextamount);
+      let nextamountwei = ethers.utils.parseUnits(
+        nextamount,
+        await paymenttoken.decimals()
+      );
       let nextrateundivided = await distribution.currentRateUndivided(
         nextamountwei
       );
       expect(nextrateundivided).to.equal(
-        calculateRateUndivided(theSettings, ethers.utils.parseEther("150000"))
+        calculateRateUndivided(
+          theSettings,
+          ethers.utils.parseUnits("150000", await paymenttoken.decimals())
+        )
       );
 
       // someone buys tokens / changes rate before buy transaction is completed
-      let dummyvolumewei = ethers.utils.parseEther("15000");
+      let dummyvolumewei = ethers.utils.parseUnits(
+        "15000",
+        await paymenttoken.decimals()
+      );
       await userBuysGainTokens(
         paymenttoken,
         distribution,
@@ -1663,11 +1784,20 @@ const doExecuteTest = (theSettings) => () => {
       await setupContracts(theSettings, true);
       currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 100000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
+      user1kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user1,
+        validto,
+        chainid,
+        distribution.address
+      );
     });
 
     it("it emits correct TokensSold event", async () => {
-      const amountgainwei = ethers.utils.parseEther("2998");
+      const amountgainwei = ethers.utils.parseUnits(
+        "2998",
+        await paymenttoken.decimals()
+      );
 
       const divider = await distribution.dividerrate_distribution();
       const rateundivided = await distribution.currentRateUndivided(
@@ -1702,8 +1832,14 @@ const doExecuteTest = (theSettings) => () => {
     });
 
     it("it emits correct TokensSold event (extra payment token included)", async () => {
-      const amountgainwei = ethers.utils.parseEther("2998");
-      const extrapaymenttokenwei = ethers.utils.parseEther("0.05");
+      const amountgainwei = ethers.utils.parseUnits(
+        "2998",
+        await paymenttoken.decimals()
+      );
+      const extrapaymenttokenwei = ethers.utils.parseUnits(
+        "0.05",
+        await paymenttoken.decimals()
+      );
 
       const divider = await distribution.dividerrate_distribution();
       const rateundivided = await distribution.currentRateUndivided(
@@ -1740,7 +1876,10 @@ const doExecuteTest = (theSettings) => () => {
     });
 
     it("it emits correct TokensSold event (slippage)", async () => {
-      const amountgainwei = ethers.utils.parseEther("2998");
+      const amountgainwei = ethers.utils.parseUnits(
+        "2998",
+        await paymenttoken.decimals()
+      );
 
       const divider = await distribution.dividerrate_distribution();
       const rateundivided = await distribution.currentRateUndivided(

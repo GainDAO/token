@@ -11,15 +11,19 @@ describe("PaymentToken", function () {
   const initialSupply = ethers.utils.parseEther("1000");
   const name = "SimUSD";
   const symbol = "SIM";
+  const cDecimals6 = 6;
+  const cDecimals18 = 18;
 
   beforeEach(async function () {
     [owner, receiver, rejectedAddress] = await ethers.getSigners();
+
     const PaymentToken = await ethers.getContractFactory("PaymentToken");
     paymentToken = await PaymentToken.deploy(
       initialSupply,
       name,
       symbol,
-      rejectedAddress.address
+      rejectedAddress.address,
+      cDecimals6
     );
     await paymentToken.deployed();
   });
@@ -39,7 +43,7 @@ describe("PaymentToken", function () {
 
     it("Should set the correct decimals", async function () {
       const decimals = await paymentToken.decimals();
-      expect(decimals).to.equal(18); // Modify this value to match the expected decimals
+      expect(decimals).to.equal(cDecimals6);
     });
   });
 
@@ -80,6 +84,40 @@ describe("PaymentToken", function () {
       expect(finalBalanceOwner).to.equal(initialBalanceOwner);
       expect(finalBalanceReceiver).to.equal(initialBalanceReceiver);
     });
+  });
+
+  describe("Decimals", function () {
+    if (
+      ("Should set the correct decimals",
+      async function () {
+        [owner, receiver, rejectedAddress] = await ethers.getSigners();
+        const PaymentToken = await ethers.getContractFactory("PaymentToken");
+
+        const paymentToken1 = await PaymentToken.deploy(
+          initialSupply,
+          name,
+          symbol,
+          rejectedAddress.address,
+          cDecimals6
+        );
+        await paymentToken1.deployed();
+
+        const decimals1 = await paymentToken1.decimals();
+        expect(decimals1).to.equal(cDecimals6);
+
+        const paymentToken2 = await PaymentToken.deploy(
+          initialSupply,
+          name,
+          symbol,
+          rejectedAddress.address,
+          cDecimals18
+        );
+        await paymentToken2.deployed();
+
+        const decimals2 = await paymentToken2.decimals();
+        expect(decimals2).to.equal(cDecimals18);
+      })
+    );
   });
 
   describe("TransferFrom", function () {

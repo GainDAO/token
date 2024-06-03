@@ -53,13 +53,15 @@ describe("Launch UGAIN", () => {
         user3,
         rejecteduser,
         settings.paymentTokenVolume,
-        settings.paymentTokenName
+        settings.paymentTokenName,
+        settings.paymentTokenDecimals
       );
       gaintoken = await setupGainDAOToken(
         deployer,
         settings.gainTokenname,
         settings.gainTokensymbol,
-        settings.cDistVolumeWei
+        settings.cDistVolumeWei,
+        settings.gainTokenDecimals
       );
       distribution = await setupERC20Distribution(
         deployer,

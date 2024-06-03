@@ -21,7 +21,7 @@ describe("GainDAOToken - construction", () => {
 
     it("can deploy " + symbol, async () => {
       const GainDAOToken = await ethers.getContractFactory("GainDAOToken");
-      token = await GainDAOToken.deploy(name, symbol, cap_wei);
+      token = await GainDAOToken.deploy(name, symbol, cap_wei, 18);
 
       await token.deployed();
     });
@@ -51,13 +51,17 @@ describe("GainDAOToken - operation", async () => {
   const cap_wei = ethers.utils.parseEther("21000000");
 
   before(async () => {
-    [dummy, dummy, dummy, deployer, minter, user] =
-      await ethers.getSigners();
+    [dummy, dummy, dummy, deployer, minter, user] = await ethers.getSigners();
   });
 
   beforeEach(async () => {
     const GainDAOToken = await ethers.getContractFactory("GainDAOToken");
-    token = await GainDAOToken.connect(deployer).deploy(name, symbol, cap_wei);
+    token = await GainDAOToken.connect(deployer).deploy(
+      name,
+      symbol,
+      cap_wei,
+      18
+    );
 
     await token.deployed();
   });
@@ -122,11 +126,9 @@ describe("GainDAOToken - operation", async () => {
     it("non minter cannot mint tokens", async () => {
       let allowed = token.connect(user).mint(user.address, 100);
       await expect(
-        allowed, 
-        "non minter cannot mint tokens")
-        .to.be.revertedWithCustomError(
-          token,
-          "Unauthorized");
+        allowed,
+        "non minter cannot mint tokens"
+      ).to.be.revertedWithCustomError(token, "Unauthorized");
     });
 
     it("cannot mint more tokens than the cap", async () => {

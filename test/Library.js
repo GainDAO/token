@@ -5,7 +5,8 @@ const setupPaymentToken = async (
   user3,
   rejecteduser,
   supply,
-  tokenname
+  tokenname,
+  decimals = 6
 ) => {
   try {
     // deploy payment token contract
@@ -14,22 +15,29 @@ const setupPaymentToken = async (
       ethers.utils.parseEther(supply),
       tokenname,
       tokenname,
-      rejecteduser.address
+      rejecteduser.address,
+      decimals
     );
     await paymenttoken.deployed();
 
     // fund users with payment token
+    const balance1DisplayUnits = "42000000001";
+    const balance2DisplayUnits = "42000000002";
+    const balance3DisplayUnits = "42000000003";
+
+    const currentDecimals = await paymenttoken.decimals();
+
     await paymenttoken.mint(
       user1.address,
-      ethers.utils.parseEther("42000000001")
+      ethers.utils.parseUnits(balance1DisplayUnits, currentDecimals)
     );
     await paymenttoken.mint(
       user2.address,
-      ethers.utils.parseEther("42000000002")
+      ethers.utils.parseUnits(balance2DisplayUnits, currentDecimals)
     );
     const tx = await paymenttoken.mint(
       user3.address,
-      ethers.utils.parseEther("42000000003")
+      ethers.utils.parseUnits(balance3DisplayUnits, currentDecimals)
     );
     await waitForTxToComplete(tx);
 
@@ -40,10 +48,15 @@ const setupPaymentToken = async (
   }
 };
 
-const setupGainDAOToken = async (deployer, name, symbol, cap_wei) => {
+const setupGainDAOToken = async (deployer, name, symbol, cap_wei, decimals) => {
   try {
     const GainDAOToken = await ethers.getContractFactory("GainDAOToken");
-    token = await GainDAOToken.connect(deployer).deploy(name, symbol, cap_wei);
+    token = await GainDAOToken.connect(deployer).deploy(
+      name,
+      symbol,
+      cap_wei,
+      decimals
+    );
 
     await token.deployed();
 
@@ -170,7 +183,10 @@ const displayStatus = async (
   );
   console.log(
     "  pool balance %s tokens",
-    ethers.utils.formatEther(await gaintoken.balanceOf(distribution.address))
+    ethers.utils.formatUnits(
+      await gaintoken.balanceOf(distribution.address),
+      await gaintoken.decimals()
+    )
   );
   console.log(
     "  distribution rate: %s/%s",
@@ -179,17 +195,26 @@ const displayStatus = async (
   );
   console.log(
     "  distribution balance %s payment tokens",
-    ethers.utils.formatEther(await paymenttoken.balanceOf(distribution.address))
+    ethers.utils.formatUnits(
+      await paymenttoken.balanceOf(distribution.address),
+      await paymenttoken.decimals()
+    )
   );
   console.log(
     "  treasury balance %s payment tokens",
-    ethers.utils.formatEther(await paymenttoken.balanceOf(treasury.address))
+    ethers.utils.formatUnits(
+      await paymenttoken.balanceOf(treasury.address),
+      await paymenttoken.decimals()
+    )
   );
   if (user) {
     console.log("  user %s", user.address);
     console.log(
       "  balance %s gain tokens",
-      ethers.utils.formatEther(await gaintoken.balanceOf(user.address))
+      ethers.utils.formatUnits(
+        await gaintoken.balanceOf(user.address),
+        await gaintoken.decimals()
+      )
     );
     console.log(
       "  balance %s eth",
@@ -197,7 +222,10 @@ const displayStatus = async (
     );
     console.log(
       "  balance %s payment tokens",
-      ethers.utils.formatEther(await paymenttoken.balanceOf(user.address))
+      ethers.utils.formatUnits(
+        await paymenttoken.balanceOf(user.address),
+        await paymenttoken.decimals()
+      )
     );
   }
 };
@@ -214,13 +242,15 @@ const calculateRateUndivided = (settings, currentvolumewei) => {
   return rateUndivided;
 };
 
-const calculateRateUndividedNew = (distVolumeWei, distStartRate, distEndRate, currentvolumewei) => {
+const calculateRateUndividedNew = (
+  distVolumeWei,
+  distStartRate,
+  distEndRate,
+  currentvolumewei
+) => {
   const rateDelta = distEndRate.sub(distStartRate);
   const rateUndivided = Math.floor(
-    rateDelta
-      .mul(currentvolumewei)
-      .div(distVolumeWei)
-      .add(distStartRate)
+    rateDelta.mul(currentvolumewei).div(distVolumeWei).add(distStartRate)
   );
 
   return rateUndivided;
@@ -230,24 +260,27 @@ const calculateRateUndividedNative = (settings, currentvolumewei) => {
   const rateDelta = settings.cDistStartRate.sub(settings.cDistEndRate);
   const offset_e18 = settings.cDistVolumeWei.sub(currentvolumewei);
 
-  const rateUndivided = 
-    rateDelta
-      .mul(offset_e18)
-      .div(settings.cDistVolumeWei)
-      .add(settings.cDistEndRate);
+  const rateUndivided = rateDelta
+    .mul(offset_e18)
+    .div(settings.cDistVolumeWei)
+    .add(settings.cDistEndRate);
 
   return rateUndivided;
 };
 
-const calculateRateUndividedNativeNew = (distVolumeWei, distStartRate, distEndRate, currentVolumeWei) => {
+const calculateRateUndividedNativeNew = (
+  distVolumeWei,
+  distStartRate,
+  distEndRate,
+  currentVolumeWei
+) => {
   const rateDelta = distStartRate.sub(distEndRate);
   const offset_e18 = distVolumeWei.sub(currentVolumeWei);
 
-  const rateUndivided = 
-    rateDelta
-      .mul(offset_e18)
-      .div(distVolumeWei)
-      .add(distEndRate);
+  const rateUndivided = rateDelta
+    .mul(offset_e18)
+    .div(distVolumeWei)
+    .add(distEndRate);
 
   return rateUndivided;
 };
@@ -260,7 +293,7 @@ const userBuysGainTokens = async (
   user,
   proof,
   validto,
-  verbose = false
+  verbose = true
 ) => {
   try {
     const divider = await distribution.dividerrate_distribution();
@@ -269,15 +302,10 @@ const userBuysGainTokens = async (
     }
     const valuepaymenttoken = amountgainwei.mul(rateundivided).div(divider);
 
-    verbose &&
-      console.log("ngaintobuy %s", ethers.utils.formatEther(amountgainwei));
+    verbose && console.log("ngaintobuy (wei) %s", amountgainwei);
     verbose &&
       console.log("buyrate %s/%s paymenttoken/gain", rateundivided, divider);
-    verbose &&
-      console.log(
-        "valuepaymenttoken %s",
-        ethers.utils.formatEther(valuepaymenttoken)
-      );
+    verbose && console.log("valuepaymenttoken wei %s", valuepaymenttoken);
 
     const balanceERC20before = await paymenttoken.balanceOf(user.address);
 
@@ -295,19 +323,19 @@ const userBuysGainTokens = async (
 
     verbose &&
       console.log(
-        "%s buys %s ugain for %s payment token at [%s/%s]",
+        "%s buys %s ugain (wei) for %s payment token (wei) at [%s/%s]",
         user.address,
-        ethers.utils.formatEther(amountgainwei),
-        ethers.utils.formatEther(valuepaymenttoken),
+        amountgainwei,
+        valuepaymenttoken,
         rateundivided.toString(),
         divider
       );
     verbose &&
       console.log(
-        "ERC20balance %s -> %s [%s]",
-        ethers.utils.formatEther(balanceERC20before),
-        ethers.utils.formatEther(balanceERC20after),
-        ethers.utils.formatEther(balanceERC20after.sub(balanceERC20before))
+        "ERC20balance (wei) %s -> %s [%s]",
+        balanceERC20before,
+        balanceERC20after,
+        balanceERC20after.sub(balanceERC20before)
       );
     return true;
   } catch (ex) {
@@ -333,54 +361,55 @@ const userBuysGainTokensNative = async (
     }
     const valuepaymenttoken = amountgainwei.mul(divider).div(rateundivided);
 
-    verbose &&
-      console.log("ngaintobuy %s", ethers.utils.formatEther(amountgainwei));
+    verbose && console.log("ngaintobuy (wei) %s", amountgainwei);
     verbose && console.log("buyrate %s/%s", rateundivided, divider);
-    verbose &&
-      console.log(
-        "valuepaymenttoken %s",
-        ethers.utils.formatEther(valuepaymenttoken)
-      );
+    verbose && console.log("valuepaymenttoken (wei) %s", valuepaymenttoken);
 
     const balanceETHbefore = await user.getBalance();
 
-    const distvolbefore = await distribution.current_distributed_balance();
+    // const distvolbefore = await distribution.current_distributed_balance();
     const tx = await distribution
       .connect(user)
       .purchaseTokens(amountgainwei, rateundivided, proof, validto, {
         value: valuepaymenttoken,
       });
     await waitForTxToComplete(tx);
-    const distvolafter = await distribution.current_distributed_balance();
+    // const distvolafter = await distribution.current_distributed_balance();
 
     const balanceETHafter = await user.getBalance();
 
     verbose &&
       console.log(
-        "%s buys %s ugain for %s payment token at [%s/%s]",
+        "%s buys %s ugain (wei) for %s payment token (wei) at [%s/%s]",
         user.address,
-        ethers.utils.formatEther(amountgainwei),
-        ethers.utils.formatEther(valuepaymenttoken),
+        amountgainwei,
+        valuepaymenttoken,
         rateundivided.toString(),
         divider
       );
     verbose &&
       console.log(
-        "ERC20balance %s -> %s [%s]",
-        ethers.utils.formatEther(balanceETHbefore),
-        ethers.utils.formatEther(balanceETHafter),
-        ethers.utils.formatEther(balanceETHafter.sub(balanceETHbefore))
+        "ERC20balance (wei) %s -> %s [%s]",
+        balanceETHbefore,
+        balanceETHafter,
+        balanceETHafter.sub(balanceETHbefore)
       );
     return true;
   } catch (ex) {
-    if(!hideerror) {
+    if (!hideerror) {
       console.error("userBuysGainTokensNative - error %s", ex.message);
     }
     return false;
   }
 };
 
-const createProof = async (mnemonic, usertowhitelist, validto, chainid, contractaddress ) => {
+const createProof = async (
+  mnemonic,
+  usertowhitelist,
+  validto,
+  chainid,
+  contractaddress
+) => {
   const kycwallet = ethers.Wallet.fromMnemonic(mnemonic);
   const coder = new ethers.utils.AbiCoder();
   const datahex = coder.encode(
@@ -396,7 +425,6 @@ const getChainId = async () => {
   const network = await ethers.provider.getNetwork();
   return network.chainId;
 };
-
 module.exports = {
   setupPaymentToken,
   setupGainDAOToken,

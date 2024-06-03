@@ -22,7 +22,7 @@ const {
 
 const {
   // calculateRateEther,
-  getBuyCyclesByCount, 
+  getBuyCyclesByCount,
   // formatBuyCycles,
 } = require("./BuyCycles.js");
 
@@ -39,9 +39,9 @@ const doExecuteTest = (theSettings) => () => {
   let pool;
   let liquiditypool;
   let tokenvault;
-  let user1; 
-  let user2; 
-  let user3; 
+  let user1;
+  let user2;
+  let user3;
   let rejecteduser;
 
   const setupContracts = async (settings, startdistribution = false) => {
@@ -73,7 +73,8 @@ const doExecuteTest = (theSettings) => () => {
         deployer,
         theSettings.gainTokenname,
         theSettings.gainTokensymbol,
-        theSettings.cDistVolumeWei
+        theSettings.cDistVolumeWei,
+        theSettings.gainTokenDecimals
       );
       distribution = await setupDistributionNative(
         deployer,
@@ -124,15 +125,15 @@ const doExecuteTest = (theSettings) => () => {
         user1kycproof = await createProof(
           MNEMONIC_KYCPROVIDER1,
           user1,
-          validto, 
-          chainid, 
+          validto,
+          chainid,
           distribution.address
         );
         user2kycproof = await createProof(
           MNEMONIC_KYCPROVIDER1,
           user2,
-          validto, 
-          chainid, 
+          validto,
+          chainid,
           distribution.address
         );
 
@@ -140,8 +141,8 @@ const doExecuteTest = (theSettings) => () => {
         user1expiredproof = await createProof(
           MNEMONIC_KYCPROVIDER1,
           user1,
-          expired, 
-          chainid, 
+          expired,
+          chainid,
           distribution.address
         );
 
@@ -190,13 +191,19 @@ const doExecuteTest = (theSettings) => () => {
       });
 
       it(`${name} - rate undivided is correct`, async () => {
-        const contract_rateundivided = await distribution.currentRateUndivided(cycle.tokens_wei);
+        const contract_rateundivided = await distribution.currentRateUndivided(
+          cycle.tokens_wei
+        );
         expect(cycle.rateundivided).to.equal(contract_rateundivided);
       });
 
       it(`${name} - purchase price is correct`, async () => {
-        const contract_rateundivided = await distribution.currentRateUndivided(cycle.tokens_wei);
-        const cost_paymenttoken_wei = cycle.tokens_wei.mul(theSettings.cDistDividerRate).div(contract_rateundivided);   
+        const contract_rateundivided = await distribution.currentRateUndivided(
+          cycle.tokens_wei
+        );
+        const cost_paymenttoken_wei = cycle.tokens_wei
+          .mul(theSettings.cDistDividerRate)
+          .div(contract_rateundivided);
         expect(cycle.cost_wei).to.equal(cost_paymenttoken_wei);
       });
 
@@ -236,7 +243,7 @@ const doExecuteTest = (theSettings) => () => {
           user1kycproof,
           validto,
           false,
-          true // hide error in log output 
+          true // hide error in log output
         );
         expect(result).to.equal(false);
       });
@@ -250,7 +257,7 @@ const doExecuteTest = (theSettings) => () => {
           user1expiredproof,
           expired,
           false,
-          true // hide error in log output 
+          true // hide error in log output
         );
         expect(result).to.equal(false);
       });
@@ -338,7 +345,8 @@ const doExecuteTest = (theSettings) => () => {
         deployer,
         theSettings.gainTokenname,
         theSettings.gainTokensymbol,
-        theSettings.cDistVolumeWei
+        theSettings.cDistVolumeWei,
+        theSettings.gainTokenDecimals
       );
     });
 
@@ -347,7 +355,7 @@ const doExecuteTest = (theSettings) => () => {
         .add(theSettings.tokenVaultVolumeWei)
         .add(theSettings.cDistVolumeWei)
         .add(theSettings.cTeamDistVolumeWei)
-        .add(theSettings.cMarketingDistVolumeWei)
+        .add(theSettings.cMarketingDistVolumeWei);
       const total2 = theSettings.cFullDistributionVolumeWei;
 
       console.log("adding up", total1.eq(total2));
@@ -369,8 +377,13 @@ const doExecuteTest = (theSettings) => () => {
         theSettings.cDistVolumeWei
       );
 
-      await expect(distribution1, "zero address cannot be used as beneficiary")
-        .to.be.revertedWithCustomError(ERC20DistributionNative, "InvalidBeneficiary");
+      await expect(
+        distribution1,
+        "zero address cannot be used as beneficiary"
+      ).to.be.revertedWithCustomError(
+        ERC20DistributionNative,
+        "InvalidBeneficiary"
+      );
     });
 
     it("distribution start rate cannot be zero or less", async () => {
@@ -410,7 +423,10 @@ const doExecuteTest = (theSettings) => () => {
       await expect(
         distribution1,
         "distribution rate divider cannot be zero or less"
-      ).to.be.revertedWithCustomError(ERC20DistributionNative, "InvalidDividerRate");
+      ).to.be.revertedWithCustomError(
+        ERC20DistributionNative,
+        "InvalidDividerRate"
+      );
     });
 
     it("distribution end rate conditions", async () => {
@@ -591,8 +607,8 @@ const doExecuteTest = (theSettings) => () => {
       const user1kycproof = await createProof(
         MNEMONIC_KYCPROVIDER1,
         user1,
-        validto, 
-        chainid, 
+        validto,
+        chainid,
         distribution.address
       );
       const txpurchase = await distribution
@@ -634,10 +650,7 @@ const doExecuteTest = (theSettings) => () => {
         to: distribution.address,
         value: ethers.utils.parseEther("0.1"),
       });
-      await expect(
-        txsend, 
-        "contract should not accept ether"
-        ).to.be.reverted;
+      await expect(txsend, "contract should not accept ether").to.be.reverted;
     });
   });
 
@@ -670,15 +683,15 @@ const doExecuteTest = (theSettings) => () => {
           user1kycproof = await createProof(
             MNEMONIC_KYCPROVIDER1,
             user1,
-            validto, 
-            chainid, 
+            validto,
+            chainid,
             distribution.address
           );
           rejecteduserkycproof = await createProof(
             MNEMONIC_KYCPROVIDER2,
             rejecteduser,
-            validto, 
-            chainid, 
+            validto,
+            chainid,
             distribution.address
           );
         } catch (ex) {
@@ -902,28 +915,40 @@ const doExecuteTest = (theSettings) => () => {
     it("must calculate correct proof", async () => {
       let coder = new ethers.utils.AbiCoder();
 
-      let datahex1 = coder.encode(["address", "uint256", "uint256", "address"], [user1.address, 345, chainid, distribution.address]);
+      let datahex1 = coder.encode(
+        ["address", "uint256", "uint256", "address"],
+        [user1.address, 345, chainid, distribution.address]
+      );
       let hashcalculated1 = ethers.utils.keccak256(datahex1);
       let hashcontract1 = await distribution.hashForKYC(user1.address, 345);
       expect(hashcontract1, "calculates correct proof #1").to.equal(
         hashcalculated1
       );
 
-      let datahex2 = coder.encode(["address", "uint256", "uint256", "address"], [user2.address, 678, chainid, distribution.address]);
+      let datahex2 = coder.encode(
+        ["address", "uint256", "uint256", "address"],
+        [user2.address, 678, chainid, distribution.address]
+      );
       let hashcalculated2 = ethers.utils.keccak256(datahex2);
       let hashcontract2 = await distribution.hashForKYC(user2.address, 678);
       expect(hashcontract2, "calculates correct proof #2").to.equal(
         hashcalculated2
       );
 
-      let datahex3 = coder.encode(["address", "uint256", "uint256", "address"], [user2.address, 678, chainid+1, distribution.address]);
+      let datahex3 = coder.encode(
+        ["address", "uint256", "uint256", "address"],
+        [user2.address, 678, chainid + 1, distribution.address]
+      );
       let hashcalculated3 = ethers.utils.keccak256(datahex3);
       let hashcontract3 = await distribution.hashForKYC(user2.address, 678);
       expect(hashcontract3, "calculates incorrect proof #1").not.to.equal(
         hashcalculated3
       );
 
-      let datahex4 = coder.encode(["address", "uint256", "uint256", "address"], [user2.address, 678, chainid, token.address]);
+      let datahex4 = coder.encode(
+        ["address", "uint256", "uint256", "address"],
+        [user2.address, 678, chainid, token.address]
+      );
       let hashcalculated4 = ethers.utils.keccak256(datahex4);
       let hashcontract4 = await distribution.hashForKYC(user2.address, 678);
       expect(hashcontract4, "calculates incorrect proof #2").not.to.equal(
@@ -1098,10 +1123,7 @@ const doExecuteTest = (theSettings) => () => {
       await expect(
         allowed,
         "treasury not allowed to change kyc after role is revoked"
-      ).to.be.revertedWithCustomError(
-        distribution,
-        "Unauthorized"
-      );
+      ).to.be.revertedWithCustomError(distribution, "Unauthorized");
 
       const tx6 = await distribution.revokeRole(
         await distribution.KYCMANAGER_ROLE(),
@@ -1121,10 +1143,7 @@ const doExecuteTest = (theSettings) => () => {
       await expect(
         allowed2,
         "treasury not allowed to change kyc after role is revoked"
-      ).to.be.revertedWithCustomError(
-        distribution,
-        "Unauthorized"
-      );
+      ).to.be.revertedWithCustomError(distribution, "Unauthorized");
     });
 
     it("is not allowed to buy with no kyc approver set", async () => {
@@ -1139,8 +1158,8 @@ const doExecuteTest = (theSettings) => () => {
       const validproof = await createProof(
         MNEMONIC_KYCPROVIDER1,
         user1,
-        futureblock, 
-        chainid, 
+        futureblock,
+        chainid,
         distribution.address
       );
 
@@ -1175,15 +1194,15 @@ const doExecuteTest = (theSettings) => () => {
       const validproof = await createProof(
         MNEMONIC_KYCPROVIDER1,
         user1,
-        futureblock, 
-        chainid, 
+        futureblock,
+        chainid,
         distribution.address
       );
       const expiredproof = await createProof(
         MNEMONIC_KYCPROVIDER1,
         user1,
-        expiredblock, 
-        chainid, 
+        expiredblock,
+        chainid,
         distribution.address
       );
 
@@ -1243,15 +1262,15 @@ const doExecuteTest = (theSettings) => () => {
       const wrongapproverproof = await createProof(
         MNEMONIC_KYCPROVIDER1,
         user1,
-        futureblock2, 
-        chainid, 
+        futureblock2,
+        chainid,
         distribution.address
       );
       const rightapproverproof = await createProof(
         MNEMONIC_KYCPROVIDER2,
         user1,
-        futureblock2, 
-        chainid, 
+        futureblock2,
+        chainid,
         distribution.address
       );
 
@@ -1297,15 +1316,15 @@ const doExecuteTest = (theSettings) => () => {
         user1kycproof = await createProof(
           MNEMONIC_KYCPROVIDER1,
           user1,
-          validto, 
-          chainid, 
+          validto,
+          chainid,
           distribution.address
         );
         user2kycproof = await createProof(
           MNEMONIC_KYCPROVIDER1,
           user2,
-          validto, 
-          chainid, 
+          validto,
+          chainid,
           distribution.address
         );
       });
@@ -1394,37 +1413,64 @@ const doExecuteTest = (theSettings) => () => {
 
       const currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 1000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
-      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto, chainid, distribution.address);
+      user1kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user1,
+        validto,
+        chainid,
+        distribution.address
+      );
+      user2kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user2,
+        validto,
+        chainid,
+        distribution.address
+      );
     });
 
-    const createStep = (distributed_amountgain_start, startrate_gainpereth, amountgain, costusd) => { return { distributed_amountgain_start, startrate_gainpereth, amountgain, costusd }; };
+    const createStep = (
+      distributed_amountgain_start,
+      startrate_gainpereth,
+      amountgain,
+      costusd
+    ) => {
+      return {
+        distributed_amountgain_start,
+        startrate_gainpereth,
+        amountgain,
+        costusd,
+      };
+    };
 
-    const schema=[
-      createStep('0','1000','630000','630'),
-      createStep('630000','905','630000','696.132596685083'),
-      createStep('1260000','810','630000','777.777777777778'),
-      createStep('1890000','715','630000','881.118881118881'),
-      createStep('2520000','620','630000','1016.12903225806'),
-      createStep('3150000','525','630000','1200'),
-      createStep('3780000','430','630000','1465.11627906977'),
-      createStep('4410000','335.','630000','1880.59701492537'),
-      createStep('5040000','240.','630000','2625.'),
-      createStep('5670000','145','630000','4344.8275862069'),
-      createStep('6300000','50','0','0'),
+    const schema = [
+      createStep("0", "1000", "630000", "630"),
+      createStep("630000", "905", "630000", "696.132596685083"),
+      createStep("1260000", "810", "630000", "777.777777777778"),
+      createStep("1890000", "715", "630000", "881.118881118881"),
+      createStep("2520000", "620", "630000", "1016.12903225806"),
+      createStep("3150000", "525", "630000", "1200"),
+      createStep("3780000", "430", "630000", "1465.11627906977"),
+      createStep("4410000", "335.", "630000", "1880.59701492537"),
+      createStep("5040000", "240.", "630000", "2625."),
+      createStep("5670000", "145", "630000", "4344.8275862069"),
+      createStep("6300000", "50", "0", "0"),
     ];
 
-    it("has the right rates at different points in the distribution", async ()=>{
+    it("has the right rates at different points in the distribution", async () => {
       const divider = ethers.BigNumber.from(theSettings.cDistDividerRate);
-      for(step of schema) {
+      for (step of schema) {
         const amountgainwei = ethers.utils.parseEther(step.amountgain);
 
-        const actualrate = await distribution.currentRateUndivided(amountgainwei);
-        const predictedrate = ethers.BigNumber.from(Math.round(step.startrate_gainpereth*divider,0));
+        const actualrate = await distribution.currentRateUndivided(
+          amountgainwei
+        );
+        const predictedrate = ethers.BigNumber.from(
+          Math.round(step.startrate_gainpereth * divider, 0)
+        );
 
         // console.log('amountgain: %s, actualrate: %s, predictedrate: %s', step.amountgain, actualrate, predictedrate);
         expect(actualrate).to.equal(predictedrate);
-
 
         const gainbalancebefore = await gaintoken.balanceOf(user1.address);
         // const balanceEthbefore = await ethers.provider.getBalance(user1.address);
@@ -1435,7 +1481,7 @@ const doExecuteTest = (theSettings) => () => {
           undefined,
           user1,
           user1kycproof,
-          validto,
+          validto
         );
 
         const gainbalanceafter = await gaintoken.balanceOf(user1.address);
@@ -1458,8 +1504,20 @@ const doExecuteTest = (theSettings) => () => {
 
       const currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 1000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
-      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto, chainid, distribution.address);
+      user1kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user1,
+        validto,
+        chainid,
+        distribution.address
+      );
+      user2kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user2,
+        validto,
+        chainid,
+        distribution.address
+      );
     });
 
     it("it is possible to buy at the current rate", async () => {
@@ -1480,7 +1538,10 @@ const doExecuteTest = (theSettings) => () => {
 
     it("calculates its own rate", () => {
       const singletest = (offset, amount) => {
-        const r = calculateRateUndividedNative(theSettings, ethers.utils.parseEther(offset).toString());
+        const r = calculateRateUndividedNative(
+          theSettings,
+          ethers.utils.parseEther(offset).toString()
+        );
         // console.log(`${offset}/${amount} - %s [%s/%s]`, r/theSettings.cDistDividerRate, r, theSettings.cDistDividerRate, );
       };
       singletest("500000", "0");
@@ -1514,7 +1575,7 @@ const doExecuteTest = (theSettings) => () => {
       );
       let predictednextrate = calculateRateUndividedNative(
         theSettings,
-        ethers.utils.parseEther("150000").toString(),
+        ethers.utils.parseEther("150000").toString()
       );
       expect(
         nextrateundivided,
@@ -1538,7 +1599,7 @@ const doExecuteTest = (theSettings) => () => {
 
       predictednextrate = calculateRateUndividedNative(
         theSettings,
-        ethers.utils.parseEther("151000").toString(),
+        ethers.utils.parseEther("151000").toString()
       );
       expect(nextrateundivided).to.equal(
         predictednextrate,
@@ -1582,7 +1643,7 @@ const doExecuteTest = (theSettings) => () => {
       );
       let predictednextrate = calculateRateUndividedNative(
         theSettings,
-        ethers.utils.parseEther("150000").toString(),
+        ethers.utils.parseEther("150000").toString()
       );
       expect(
         nextrateundivided,
@@ -1622,7 +1683,10 @@ const doExecuteTest = (theSettings) => () => {
         nextamountwei
       );
       expect(nextrateundivided).to.equal(
-        calculateRateUndividedNative(theSettings, ethers.utils.parseEther("150000").toString())
+        calculateRateUndividedNative(
+          theSettings,
+          ethers.utils.parseEther("150000").toString()
+        )
       );
 
       // someone buys tokens / changes rate before buy transaction is completed
@@ -1655,7 +1719,13 @@ const doExecuteTest = (theSettings) => () => {
       await setupContracts(theSettings, true);
       currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 100000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
+      user1kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user1,
+        validto,
+        chainid,
+        distribution.address
+      );
     });
 
     it("it emits correct TokensSold event", async () => {
@@ -1708,8 +1778,8 @@ const doExecuteTest = (theSettings) => () => {
         ethers.BigNumber.from("1000")
       );
       const worsevaluepaymenttoken = amountgainwei
-      .mul(divider)
-      .div(worserateundivided);
+        .mul(divider)
+        .div(worserateundivided);
 
       const tx3 = await expect(
         distribution
@@ -1770,7 +1840,7 @@ const doExecuteTest = (theSettings) => () => {
     let total = 0;
     // while (total < 10000) {
     while (total === 0) {
-        //
+      //
       total += cBatchsize;
       tokencounts.push(cBatchsize);
     }

@@ -12,39 +12,27 @@ const cDigitsUGAIN = {
   cShiftCommaDigits: 3, // actual start/end rates are (given rate / 10^cShiftCommaDigits)
 };
 
-const cUGAINFullDistributionVolumeWei = ethers.utils.parseEther("250000000");
+const cUGAINFullDistributionVolumeWei = ethers.utils.parseUnits("250000000", 6);
 
 const cSettingsUGAIN = {
   paymentTokenName: "SIMUSDC",
   paymentTokenVolume: "2500000000000", // overall payment token supply size during testing
+  paymentTokenDecimals: 6,
 
   gainTokenname: "TEST-USD",
   gainTokensymbol: "TUSD",
-  // cDistVolumeWei: cUGAINFullDistributionVolumeWei.div(5), // 20%
-  cDistVolumeWei: cUGAINFullDistributionVolumeWei.div(10), // 10%
+  gainTokenDecimals: 6,
+  cDistVolumeWei: cUGAINFullDistributionVolumeWei.mul(55).div(200), // 27.5%
 
   cDistDividerRate: ethers.BigNumber.from(
     10 ** cDigitsUGAIN.cPrecisionDigits * 10 ** cDigitsUGAIN.cShiftCommaDigits
   ),
-  cDistStartRate: ethers.BigNumber.from("1").mul(10 ** (cDigitsUGAIN.cPrecisionDigits + cDigitsUGAIN.cShiftCommaDigits)),
-  // cDistEndRate: ethers.BigNumber.from("30").mul(5 ** (cDigitsUGAIN.cPrecisionDigits + cDigitsUGAIN.cShiftCommaDigits)),
-  cDistEndRate: ethers.BigNumber.from("10").mul(10 ** (cDigitsUGAIN.cPrecisionDigits + cDigitsUGAIN.cShiftCommaDigits)),
-};
-
-const cSettingsUGAINFlat = {
-  paymentTokenName: "SIMGAETH",
-  paymentTokenVolume: "42000000000", // overall payment token supply size during testing
-
-  gainTokenname: "TEST-GAETH",
-  gainTokensymbol: "TGAITH",
-  // cDistVolumeWei: ethers.utils.parseEther("42000000"),
-  cDistVolumeWei: cUGAINFullDistributionVolumeWei.div(10), // 10%
-
-  cDistDividerRate: ethers.BigNumber.from(
+  cDistStartRate: ethers.BigNumber.from("1").mul(
     10 ** (cDigitsUGAIN.cPrecisionDigits + cDigitsUGAIN.cShiftCommaDigits)
   ),
-  cDistStartRate: ethers.BigNumber.from("1").mul(10 ** (cDigitsUGAIN.cPrecisionDigits + cDigitsUGAIN.cShiftCommaDigits)),
-  cDistEndRate: cSettingsUGAIN.cDistEndRate,
+  cDistEndRate: ethers.BigNumber.from("20").mul(
+    10 ** (cDigitsUGAIN.cPrecisionDigits + cDigitsUGAIN.cShiftCommaDigits)
+  ),
 };
 
 const cDigitsETH = {
@@ -55,52 +43,49 @@ const cDigitsETH = {
 const cETHFullDistributionVolumeWei = ethers.utils.parseEther("42000000");
 
 const cSettingsETH = {
-    cFullDistributionVolumeWei: cETHFullDistributionVolumeWei,
+  cFullDistributionVolumeWei: cETHFullDistributionVolumeWei,
 
-    liquidityPoolVolumeWei: cETHFullDistributionVolumeWei.mul(55).div(200), // 27.5%
-    tokenVaultVolumeWei: cETHFullDistributionVolumeWei.div(2), // 50%
+  liquidityPoolVolumeWei: cETHFullDistributionVolumeWei.mul(55).div(200), // 27.5%
+  tokenVaultVolumeWei: cETHFullDistributionVolumeWei.div(2), // 50%
 
-    paymentTokenName: "SIMGAETH",
-    paymentTokenVolume: "42000000000", // overall payment token supply size during testing
-  
-    gainTokenname: "TEST-GAETH",
-    gainTokensymbol: "TGAITH",
-    cDistVolumeWei: cETHFullDistributionVolumeWei.mul(3).div(20), // 15%
-  
-    // normal distribution volume
-    cDistDividerRate: ethers.BigNumber.from(
-      10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
-    ),
-    cDistStartRate: ethers.BigNumber.from("1000").mul(10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)),
-    cDistEndRate: ethers.BigNumber.from("50").mul(10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)),
+  paymentTokenName: "SIMGAETH",
+  paymentTokenVolume: "42000000000", // overall payment token supply size during testing
+  paymentTokenDecimals: 18,
 
-    // team distribution volume 
-    cTeamDistVolumeWei: cETHFullDistributionVolumeWei.div(20), // 5%
-    cTeamDistStartRate: ethers.BigNumber.from("1000").mul(10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)),
-    cTeamDistEndRate: ethers.BigNumber.from("1000").mul(10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)),
+  gainTokenname: "TEST-GAETH",
+  gainTokensymbol: "TGAITH",
+  gainTokenDecimals: 18,
+  cDistVolumeWei: cETHFullDistributionVolumeWei.mul(3).div(20), // 15%
 
-    // marketing distribution volume 
-    cMarketingDistVolumeWei: cETHFullDistributionVolumeWei.div(40), // 2.5%
-    cMarketingDistStartRate: ethers.BigNumber.from("1000").mul(10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)),
-    cMarketingDistEndRate: ethers.BigNumber.from("1000").mul(10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)),
+  // normal distribution volume
+  cDistDividerRate: ethers.BigNumber.from(
+    10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
+  ),
+  cDistStartRate: ethers.BigNumber.from("1000").mul(
+    10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
+  ),
+  cDistEndRate: ethers.BigNumber.from("50").mul(
+    10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
+  ),
+
+  // team distribution volume
+  cTeamDistVolumeWei: cETHFullDistributionVolumeWei.div(20), // 5%
+  cTeamDistStartRate: ethers.BigNumber.from("1000").mul(
+    10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
+  ),
+  cTeamDistEndRate: ethers.BigNumber.from("1000").mul(
+    10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
+  ),
+
+  // marketing distribution volume
+  cMarketingDistVolumeWei: cETHFullDistributionVolumeWei.div(40), // 2.5%
+  cMarketingDistStartRate: ethers.BigNumber.from("1000").mul(
+    10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
+  ),
+  cMarketingDistEndRate: ethers.BigNumber.from("1000").mul(
+    10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
+  ),
 };
-  
-// const cSettingsETHFlat = {
-//   paymentTokenName: "SIMGAETH",
-//   paymentTokenVolume: "42000000000", // overall payment token supply size during testing
-
-//   gainTokenname: "TEST-GAETH",
-//   gainTokensymbol: "TGAITH",
-
-//   // distribution volume 
-//   cDistVolumeWei: cETHFullDistributionVolumeWei.div(5), // 20%
-
-//   cDistDividerRate: ethers.BigNumber.from(
-//     10 ** (cDigitsETH.cPrecisionDigits + cDigitsETH.cShiftCommaDigits)
-//   ),
-//   cDistStartRate: cSettingsETH.cDistStartRate,
-//   cDistEndRate: cSettingsETH.cDistStartRate,
-// };
 
 module.exports = {
   MNEMONIC_KYCPROVIDER1,
@@ -109,6 +94,5 @@ module.exports = {
   ADDRESS_KYCPROVIDER2,
   cMaxTestDuration,
   cSettingsUGAIN,
-  cSettingsUGAINFlat,
   cSettingsETH,
 };

@@ -29,6 +29,7 @@ const fastmode = true;
 
 const doExecuteTest = (theSettings) => () => {
   let paymenttoken;
+  let distribution;
   let gaintoken;
   let deployer;
   let treasury;
@@ -59,14 +60,16 @@ const doExecuteTest = (theSettings) => () => {
         user2,
         user3,
         rejecteduser,
-        theSettings.paymentTokenVolume,
-        theSettings.paymentTokenName
+        settings.paymentTokenVolume,
+        settings.paymentTokenName,
+        settings.paymentTokenDecimals
       );
       gaintoken = await setupGainDAOToken(
         deployer,
-        theSettings.gainTokenname,
-        theSettings.gainTokensymbol,
-        theSettings.cDistVolumeWei
+        settings.gainTokenname,
+        settings.gainTokensymbol,
+        settings.cDistVolumeWei,
+        settings.gainTokenDecimals
       );
       distribution = await setupERC20Distribution(
         deployer,
@@ -137,10 +140,17 @@ const doExecuteTest = (theSettings) => () => {
       "**************************************************************"
     );
     console.log("*** ", title);
-    console.log(
-      "distributed volume",
-      ethers.utils.formatEther(await distribution.current_distributed_balance())
-    );
+    if (distribution && paymenttoken) {
+      console.log(
+        "distributed volume",
+        ethers.utils.formatUnits(
+          await distribution.current_distributed_balance(),
+          await paymenttoken.decimals()
+        )
+      );
+    } else {
+      console.log("distribution or paymenttoken not set");
+    }
 
     await logUser("user 1", user1, amountgainwei1);
     await logUser("user 2", user2, amountgainwei2);
@@ -155,26 +165,47 @@ const doExecuteTest = (theSettings) => () => {
     let validto, user1kycproof, user2kycproof, user3kycproof;
 
     before(async () => {
-      const chainid = await getChainId()
+      const chainid = await getChainId();
       // Enable automining
       network.provider.send("evm_setAutomine", [true]);
 
       await setupContracts(theSettings, true);
       currentblock = await ethers.provider.getBlockNumber();
       validto = currentblock + 100000;
-      user1kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user1, validto, chainid, distribution.address);
-      user2kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user2, validto, chainid, distribution.address);
-      user3kycproof = await createProof(MNEMONIC_KYCPROVIDER1, user3, validto, chainid, distribution.address);
+      user1kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user1,
+        validto,
+        chainid,
+        distribution.address
+      );
+      user2kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user2,
+        validto,
+        chainid,
+        distribution.address
+      );
+      user3kycproof = await createProof(
+        MNEMONIC_KYCPROVIDER1,
+        user3,
+        validto,
+        chainid,
+        distribution.address
+      );
 
       const deployerProof = await createProof(
         MNEMONIC_KYCPROVIDER1,
         deployer,
-        validto, 
-        chainid, 
+        validto,
+        chainid,
         distribution.address
       );
 
-      const initialAmount = ethers.utils.parseEther("1000000");
+      const initialAmount = ethers.utils.parseUnits(
+        "1000000",
+        await paymenttoken.decimals()
+      );
       await paymenttoken
         .connect(deployer)
         .approve(distribution.address, initialAmount);
@@ -191,7 +222,10 @@ const doExecuteTest = (theSettings) => () => {
       await logStartConditions();
 
       // approve sufficient amount of tokens for all users
-      const amountapprove = ethers.utils.parseEther("100000");
+      const amountapprove = ethers.utils.parseUnits(
+        "100000",
+        await paymenttoken.decimals()
+      );
       const txa1 = await paymenttoken
         .connect(user1)
         .approve(distribution.address, amountapprove);
@@ -210,9 +244,18 @@ const doExecuteTest = (theSettings) => () => {
       await txa3.wait();
 
       // simulate multiple transactions in a single block without slippage
-      const amountgainwei1 = ethers.utils.parseEther("9000");
-      const amountgainwei2 = ethers.utils.parseEther("11000");
-      const amountgainwei3 = ethers.utils.parseEther("14000");
+      const amountgainwei1 = ethers.utils.parseUnits(
+        "9000",
+        await paymenttoken.decimals()
+      );
+      const amountgainwei2 = ethers.utils.parseUnits(
+        "11000",
+        await paymenttoken.decimals()
+      );
+      const amountgainwei3 = ethers.utils.parseUnits(
+        "14000",
+        await paymenttoken.decimals()
+      );
 
       await logUserTable(
         "start",
@@ -271,13 +314,13 @@ const doExecuteTest = (theSettings) => () => {
 
       // each user should have received the given amount of tokens
       expect(await gaintoken.balanceOf(user1.address)).to.equal(
-        ethers.utils.parseEther("9000")
+        ethers.utils.parseUnits("9000", await paymenttoken.decimals())
       );
       expect(await gaintoken.balanceOf(user2.address)).to.equal(
-        ethers.utils.parseEther("0")
+        ethers.utils.parseUnits("0", await paymenttoken.decimals())
       );
       expect(await gaintoken.balanceOf(user3.address)).to.equal(
-        ethers.utils.parseEther("0")
+        ethers.utils.parseUnits("0", await paymenttoken.decimals())
       );
 
       // each user wants to buy at current rate + 10% slippage
@@ -315,13 +358,13 @@ const doExecuteTest = (theSettings) => () => {
 
       // each user should have received the given amount of tokens
       expect(await gaintoken.balanceOf(user1.address)).to.equal(
-        ethers.utils.parseEther("18000")
+        ethers.utils.parseUnits("18000", await paymenttoken.decimals())
       );
       expect(await gaintoken.balanceOf(user2.address)).to.equal(
-        ethers.utils.parseEther("11000")
+        ethers.utils.parseUnits("11000", await paymenttoken.decimals())
       );
       expect(await gaintoken.balanceOf(user3.address)).to.equal(
-        ethers.utils.parseEther("14000")
+        ethers.utils.parseUnits("14000", await paymenttoken.decimals())
       );
 
       await logUserTable("end", amountgainwei1, amountgainwei2, amountgainwei3);

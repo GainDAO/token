@@ -24,7 +24,7 @@
     "chai": "^4.3.6",
     "chai-http": "^4.3.0",
     "ethers": "^5.6.9",
-    "hardhat": "^2.12.6"
+    "hardhat": "^2.22.3"
   },
   "dependencies": {
     "chartjs-node-canvas": "^4.1.6",
